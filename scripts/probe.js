@@ -6,6 +6,7 @@
 //   node scripts/probe.js <pkgName>  detail for one Community package
 
 const path = require('node:path');
+const fsp = require('node:fs/promises');
 
 const { scanPackage } = require('../src/main/parsers/package');
 const { detectInstalls, resolvePackageDirs } = require('../src/main/roots');
@@ -18,6 +19,23 @@ async function findCommunityDir() {
     }
   }
   return null;
+}
+
+const SAMPLE_SIZE = 6;
+
+/**
+ * Package folders spread evenly across the directory listing.
+ *
+ * Evenly spaced rather than the first N, because add-on folders sort by
+ * vendor prefix and the first N would all come from whichever vendor happens
+ * to sort first.
+ */
+async function samplePackages(communityDir, count) {
+  const entries = await fsp.readdir(communityDir, { withFileTypes: true });
+  const dirs = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  if (dirs.length <= count) return dirs;
+  const step = dirs.length / count;
+  return Array.from({ length: count }, (_, i) => dirs[Math.floor(i * step)]);
 }
 
 async function detail(name, communityDir) {
@@ -56,14 +74,19 @@ async function main() {
     await detail(arg, communityDir);
     return;
   }
-  for (const name of [
-    'a2a-aircraft-pa24',
-    'pmdg-aircraft-738',
-    'bksq-aircraft-baronpro',
-    'PMDG 737-800 WestJet C-FPLS',
-    'inibuilds-aircraft-a350',
-    'fnx-aircraft-320',
-  ]) {
+
+  // No argument: sample whatever is actually installed. This used to be a
+  // fixed list of the packages each parsing bug was found in, which meant the
+  // probe printed nothing at all for anyone who did not own those same
+  // add-ons.
+  const names = await samplePackages(communityDir, SAMPLE_SIZE);
+  if (!names.length) {
+    console.error('No packages in', communityDir);
+    process.exit(1);
+  }
+  console.log(`Sampling ${names.length} of the packages in ${communityDir}`);
+  console.log('Pass a package name as an argument to probe one in particular.\n');
+  for (const name of names) {
     console.log('===', name);
     await detail(name, communityDir);
   }
