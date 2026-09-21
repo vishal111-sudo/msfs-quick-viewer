@@ -1,0 +1,1045 @@
+/* ============================================================================
+   MSFS Quick Viewer — design system
+   ----------------------------------------------------------------------------
+   Direction: builder-tool (Linear / Raycast school). Warm near-black ground,
+   hairline borders instead of filled cards, one accent used sparingly, and a
+   monospace face for the codes an aircraft is actually identified by.
+
+   Rules this file follows, so later edits stay coherent:
+
+   RADIUS GRAMMAR — exactly two radii, chosen by role, never mixed:
+     --r-sm (4px)  controls: buttons, inputs, badges, chips, facet rows
+     --r-md (8px)  surfaces: cards, panels, drawers, package rows
+     No pill shapes. Fully-round belongs to avatars and dots, which this app
+     does not have.
+
+   COLOUR — the accent marks interactive state only (selection, focus, links).
+   It must stay under ~5% of pixels, so status and metadata use neutrals. The
+   artwork supplies all the colour this interface needs.
+
+   THEME — dark is the default; light is a full token swap on
+   `:root[data-theme='light']`. "System" is resolved in the renderer rather
+   than with a media query, so the tokens are declared exactly once per theme.
+   Chrome that sits on top of photography (card badges, the drawer close
+   button, the scrim) stays dark in both themes, because its backdrop is the
+   image, not the page.
+
+   MOTION — state feedback only, 120ms. No hover lift, no entrance animation.
+   ========================================================================= */
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/ibm-plex-sans-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/ibm-plex-sans-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('fonts/ibm-plex-sans-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  /* Ground is warm near-black, not blue-black: it sits under photography all
+     day and a cool ground tints every thumbnail. */
+  --bg: #0c0c0e;
+  --bg-raised: #111113;
+  --bg-inset: #09090b;
+  --bg-hover: #17171a;
+  --bg-active: #1c1c20;
+
+  /* Hairlines do the work that card fills used to. */
+  --line: #232327;
+  --line-strong: #32323a;
+
+  --text: #ececed;
+  --text-dim: #9b9ba4;
+  /* Lifted from #6b6b74, which measured 3.70:1 on the ground — under the
+     4.5:1 needed for the 10-11px labels and counts this colour is used for. */
+  --text-faint: #86868f;
+
+  /* One accent. Cyan-teal: cool, and deliberately not the indigo/violet that
+     every generated interface defaults to. */
+  --accent: #52b6cf;
+  --accent-quiet: rgba(82, 182, 207, 0.14);
+  --accent-line: rgba(82, 182, 207, 0.45);
+
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+
+  /* Grid metrics, overridden per card size. */
+  --card-width: 218px;
+  --art-height: 134px;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  /* Warm off-white rather than pure white: the same reasoning as the dark
+     ground, since thumbnails sit directly on it. */
+  --bg: #fcfcfb;
+  --bg-raised: #ffffff;
+  --bg-inset: #f2f2f0;
+  --bg-hover: #f0f0ee;
+  --bg-active: #e6e6e3;
+
+  --line: #e2e2de;
+  --line-strong: #cbcbc5;
+
+  --text: #17171a;
+  --text-dim: #55555f;
+  --text-faint: #6f6f79;
+
+  /* Darkened well past the plain-background minimum: a selected facet paints
+     this over an accent-tinted row, which costs about a point of contrast. */
+  --accent: #09617a;
+  --accent-quiet: rgba(9, 97, 122, 0.11);
+  --accent-line: rgba(9, 97, 122, 0.5);
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 var(--font-sans);
+  font-feature-settings: 'ss02' 1;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-wrap: pretty;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/** Codes an aircraft is identified by: ICAO type, registration, version, path. */
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 46px;
+  padding: 0 12px 0 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* A drawn mark, not a gradient chip: two strokes reading as a tailplane. */
+.brand-mark {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--text-dim);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.search {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 460px;
+}
+
+.search input {
+  width: 100%;
+  height: 28px;
+  padding: 0 32px 0 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+
+.search input::placeholder {
+  color: var(--text-faint);
+}
+
+.search input:focus {
+  border-color: var(--accent-line);
+  outline: none;
+}
+
+.search kbd {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  transform: translateY(-50%);
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+select {
+  height: 28px;
+  padding: 0 6px;
+  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.button {
+  height: 28px;
+  padding: 0 11px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.button:hover {
+  background: var(--bg-hover);
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.button.ghost {
+  border-color: transparent;
+}
+
+.button.ghost:hover {
+  border-color: var(--line);
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.segmented button {
+  width: 26px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--line);
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.segmented button:last-child {
+  border-right: none;
+}
+
+.segmented button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--bg-active);
+  color: var(--text);
+}
+
+/* ---------- layout ---------- */
+
+.layout {
+  display: flex;
+  height: calc(100% - 46px);
+}
+
+.sidebar {
+  flex: 0 0 200px;
+  padding: 12px 8px 24px;
+  overflow-y: auto;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+
+.facet {
+  margin-bottom: 14px;
+}
+
+.facet h3 {
+  margin: 0 0 4px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.facet-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 7px;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.facet-option:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* Selection is one of the few places the accent is allowed to appear. */
+.facet-option[aria-pressed='true'] {
+  background: var(--accent-quiet);
+  color: var(--accent);
+}
+
+.facet-option .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facet-option .count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.facet-option[aria-pressed='true'] .count {
+  color: inherit;
+}
+
+.content {
+  flex: 1 1 auto;
+  /* The scroll container is this wrapper, not the grid itself: a grid that is
+     also a fixed-height scroller sizes its `auto` rows against the viewport
+     instead of its content, which overlaps the cards. */
+  overflow-y: auto;
+}
+
+.content-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.result-count {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.result-count strong {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Photo lookups run in the background; this reports the whole job rather than
+   leaving each card to say "looking" on its own. */
+.art-progress {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.art-progress[hidden] {
+  display: none;
+}
+
+.art-progress-text {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.art-progress-track {
+  width: 104px;
+  height: 3px;
+  background: var(--bg-active);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.art-progress-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+  gap: 10px;
+  padding: 14px 16px 28px;
+  align-content: start;
+  /* Cards must size themselves, not be stretched to the row: a stretched grid
+     item makes Chromium measure a ratio-derived art box as zero-height and the
+     whole row collapses. */
+  align-items: start;
+}
+
+.grid[data-size='small'] {
+  --card-width: 162px;
+  --art-height: 100px;
+  gap: 8px;
+}
+
+.grid[data-size='large'] {
+  --card-width: 300px;
+  --art-height: 184px;
+  gap: 14px;
+}
+
+.empty {
+  padding: 48px 16px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+/* ---------- cards ---------- */
+
+.card {
+  /* Plain block layout, not flex: an `aspect-ratio` box only resolves its
+     height from a definite width, and a column flex item's width is not
+     definite while the main axis is being sized. */
+  display: block;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.card:hover {
+  border-color: var(--line-strong);
+  background: var(--bg-raised);
+}
+
+.card-art {
+  position: relative;
+  /* A fixed height rather than `aspect-ratio`, so every card in a row matches
+     no matter how wide the `1fr` columns end up. */
+  height: var(--art-height);
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-art .placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: center;
+  padding: 10px;
+}
+
+.card-art .placeholder .glyph {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(45deg);
+  opacity: 0.5;
+}
+
+.card-badges {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+
+/* Neutral by default: a badge is metadata, not a call to action. */
+.badge {
+  padding: 2px 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  border-radius: var(--r-sm);
+  background: rgba(10, 10, 12, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--text-dim);
+  backdrop-filter: blur(4px);
+}
+
+.badge.quiet {
+  color: var(--text-faint);
+}
+
+.card-body {
+  padding: 8px 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Reserve the height a two-line title would need, on the body rather than on
+     the title itself. Cards size to their content, so without a reservation a
+     wrapped title leaves the row's bottom edge ragged — but reserving it on
+     the title opens a gap between the name and the developer. Here the slack
+     falls after the last line, where it reads as padding. */
+  min-height: 88px;
+}
+
+.card-title {
+  font-weight: 500;
+  font-size: 12.5px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-dev {
+  color: var(--text-dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-dev-more {
+  color: var(--text-faint);
+}
+
+.card-meta {
+  display: flex;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.card-meta span + span::before {
+  content: '·';
+  margin-right: 5px;
+}
+
+/* ---------- drawers ---------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 6, 8, 0.66);
+  z-index: 20;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(540px, 92vw);
+  background: var(--bg-raised);
+  border-left: 1px solid var(--line);
+  z-index: 21;
+  overflow-y: auto;
+}
+
+.drawer-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 1;
+  background: rgba(10, 10, 12, 0.72);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+
+.drawer-close:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.drawer-body {
+  padding-bottom: 28px;
+}
+
+.detail-hero {
+  aspect-ratio: 16 / 9;
+  background: var(--bg-inset);
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.detail-main {
+  padding: 16px 20px 0;
+}
+
+.detail-main h2 {
+  margin: 0 0 3px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.detail-sub {
+  margin: 0 0 14px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 16px;
+}
+
+.chip {
+  padding: 2px 7px;
+  font-size: 11.5px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--text-dim);
+}
+
+.chip.code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.section {
+  padding: 0 20px;
+  margin-bottom: 20px;
+}
+
+.section h3 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 124px 1fr;
+  gap: 5px 12px;
+  font-size: 12.5px;
+}
+
+.kv dt {
+  color: var(--text-faint);
+}
+
+.kv dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.package {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.package-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.package-head strong {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.package-path {
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  font-size: 10.5px;
+  word-break: break-all;
+  margin-bottom: 3px;
+}
+
+.livery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 7px;
+}
+
+.livery {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.livery-art {
+  aspect-ratio: 16 / 10;
+  background: var(--bg-inset);
+}
+
+.livery-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.livery-art .placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.livery-name {
+  padding: 5px 7px 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.art-credit {
+  padding: 8px 20px 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 20px 18px;
+}
+
+/* ---------- settings ---------- */
+
+.setting {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting:last-child {
+  border-bottom: none;
+}
+
+.setting input[type='checkbox'] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.setting-text strong {
+  display: block;
+  font-weight: 500;
+}
+
+.setting-text span {
+  color: var(--text-faint);
+}
+
+.setting-note {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-faint);
+}
+
+.setting select {
+  display: block;
+  margin-top: 7px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.root-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.root-row code {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+  color: var(--text-dim);
+}
+
+/* ---------- splash + toast ---------- */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  z-index: 40;
+}
+
+.splash[hidden] {
+  display: none;
+}
+
+.splash-inner {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+
+.splash-sub {
+  margin: 0;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  font-size: 12.5px;
+  background: var(--bg-active);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  z-index: 50;
+}
+
+/* Motion is state feedback only, so it collapses cleanly when unwanted. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 880px) {
+  .sidebar {
+    display: none;
+  }
+}
+
+/* The empty state carries real guidance when no sim was detected, so it is a
+   small panel rather than one grey line. */
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 56px auto;
+  padding: 0 16px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.empty p {
+  margin: 0;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-note {
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.empty-detail {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+}
+
+.empty-detail summary {
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.empty-paths {
+  margin: 9px 0 6px;
+  padding-left: 16px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  line-height: 1.7;
+  word-break: break-all;
+}

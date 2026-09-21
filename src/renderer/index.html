@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src msfsart: data:; font-src 'self';"
+    />
+    <title>MSFS Quick Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">MSFS Quick Viewer</span>
+      </div>
+
+      <div class="search">
+        <input
+          id="search"
+          type="search"
+          placeholder="Search aircraft, developer, livery, ICAO type"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <kbd>/</kbd>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="sr-only" for="sort">Sort by</label>
+        <select id="sort" title="Sort">
+          <option value="aircraft">Aircraft</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="liveries">Most liveries</option>
+          <option value="category">Category</option>
+          <option value="developer">Developer</option>
+        </select>
+
+        <div class="segmented" role="group" aria-label="Card size">
+          <button type="button" data-size="small" title="Small cards">S</button>
+          <button type="button" data-size="medium" title="Medium cards">M</button>
+          <button type="button" data-size="large" title="Large cards">L</button>
+        </div>
+
+        <button type="button" id="rescan" class="button">Rescan</button>
+        <button type="button" id="open-settings" class="button ghost" title="Settings">Settings</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="facets" id="facets"></div>
+      </aside>
+
+      <main class="content">
+        <div class="content-head">
+          <p class="result-count" id="result-count">Scanning</p>
+          <button type="button" id="clear-filters" class="link" hidden>Clear filters</button>
+
+          <div class="art-progress" id="art-progress" hidden>
+            <span class="art-progress-text" id="art-progress-text"></span>
+            <span class="art-progress-track"><span class="art-progress-bar" id="art-progress-bar"></span></span>
+          </div>
+        </div>
+        <div class="grid" id="grid" data-size="medium"></div>
+        <div class="empty" id="empty" hidden></div>
+      </main>
+    </div>
+
+    <div class="scrim" id="scrim" hidden></div>
+
+    <section class="drawer" id="detail" hidden aria-label="Aircraft detail">
+      <button type="button" class="drawer-close" id="detail-close" aria-label="Close">×</button>
+      <div class="drawer-body" id="detail-body"></div>
+    </section>
+
+    <section class="drawer" id="settings" hidden aria-label="Settings">
+      <button type="button" class="drawer-close" id="settings-close" aria-label="Close">×</button>
+      <div class="drawer-body" id="settings-body"></div>
+    </section>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="splash" id="splash">
+      <div class="splash-inner">
+        <span class="spinner" aria-hidden="true"></span>
+        <p id="splash-text">Scanning your MSFS packages…</p>
+        <p class="splash-sub" id="splash-sub"></p>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

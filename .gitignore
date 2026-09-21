@@ -1,0 +1,12 @@
+node_modules/
+dist/
+
+# The built app is moved to the project root by `npm run dist` so it is easy
+# to find, but a ~96 MB binary does not belong in git history — attach it to a
+# release instead.
+MSFS-Quick-Viewer-*-portable.exe
+
+# Probe screenshots. A glob rather than a list: probe-empty-state.js renders
+# %APPDATA% paths that include the Windows username, and naming them one by
+# one means the next probe added leaks by default.
+smoke*.png

@@ -1,0 +1,59 @@
+{
+  "name": "msfs-quick-viewer",
+  "productName": "MSFS Quick Viewer",
+  "version": "0.1.1",
+  "description": "Browse the aircraft installed in Microsoft Flight Simulator 2024 with thumbnails, categories and search.",
+  "main": "src/main/main.js",
+  "type": "commonjs",
+  "author": "vishal111-sudo",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron scripts/make-icon.js",
+    "smoke": "electron scripts/smoke.js",
+    "scan": "node scripts/probe-scan.js",
+    "dist": "electron-builder --win portable && node scripts/place-exe.js"
+  },
+  "build": {
+    "appId": "com.msfsquickviewer.app",
+    "productName": "MSFS Quick Viewer",
+    "copyright": "MSFS Quick Viewer",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "MSFS-Quick-Viewer-${version}-portable.exe",
+      "unicode": true
+    },
+    "compression": "maximum"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vishal111-sudo/msfs-quick-viewer.git"
+  },
+  "homepage": "https://github.com/vishal111-sudo/msfs-quick-viewer",
+  "bugs": {
+    "url": "https://github.com/vishal111-sudo/msfs-quick-viewer/issues"
+  }
+}
