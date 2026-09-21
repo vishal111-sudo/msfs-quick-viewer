@@ -97,13 +97,26 @@ app.whenReady().then(async () => {
 
   // Open the detail drawer for the aircraft with the most liveries, so the
   // screenshot exercises the metadata table and the livery gallery too.
+  // Read the count off the badge rather than matching literal totals: the old
+  // version looked for "55 liveries" from one particular library, which no
+  // card has ever said (the badge reads "55 liv"), so it always fell through
+  // to an arbitrary card.
   const opened = await win.webContents.executeJavaScript(`(() => {
     const cards = [...document.querySelectorAll('.card')];
-    const target = cards.find(c => /55 liveries|42 liveries|27 liveries/.test(c.textContent)) || cards[3];
+    const liveryCount = (card) => {
+      const badge = [...card.querySelectorAll('.badge')]
+        .map((node) => /^(\\d+) liv$/.exec(node.textContent.trim()))
+        .find(Boolean);
+      return badge ? Number(badge[1]) : 0;
+    };
+    const target = cards.reduce(
+      (best, card) => (liveryCount(card) > liveryCount(best) ? card : best),
+      cards[0],
+    );
     if (!target) return null;
     target.scrollIntoView();
     target.click();
-    return target.querySelector('.card-title').textContent;
+    return target.querySelector('.card-title').textContent + ' (' + liveryCount(target) + ' liveries)';
   })()`);
   // capturePage can hand back the previous composited frame, so wait for the
   // drawer to be painted rather than merely present in the DOM.
