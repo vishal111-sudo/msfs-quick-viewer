@@ -111,8 +111,19 @@ Dark, light, or match Windows, chosen in Settings.
 
 Everything that reads what the sim or the author declared (`manifest.json`,
 `aircraft.cfg`, `livery.cfg`, `.locPak`, `Content.xml`, ICAO designators) works
-for anyone. Developer prefixes are learned from your own folder names at scan
-time.
+for anyone.
+
+Developer prefixes are learned at scan time rather than listed, because a list
+is only ever right for the library it was written against and cannot know
+about a studio that ships its first aircraft tomorrow. Four rules, strongest
+first: the `<vendor>-aircraft-<model>` folder convention; a folder prefix that
+echoes the package's declared `creator`, which catches abbreviations like
+`mscarenado-` for Carenado; a prefix one creator uses across several packages,
+which catches abbreviations that resemble nothing in the studio's name; and
+finally, dropping the leading segment of an airframe folder outright, which
+needs no vocabulary at all and is what handles a studio tag the package folder
+never mentions. Only sim-internal forms are hard-coded, since those have no
+manifest to read.
 
 Three things are curated word lists tuned against one library, and will have
 gaps: equipment vs role words, category keywords, and the stock aircraft

@@ -408,34 +408,113 @@ function mergeStreamed(byKey, pkg) {
 // iniBuilds ships `inibuilds-a380` for the streamed `a380`, and mod authors
 // prefix with their own name. Stripping those leading tokens lines them up.
 //
-// Most of this list is LEARNED from the library being scanned rather than
-// written down, because a fixed list is only ever right for one person's
-// add-ons — this one was already missing four vendors present on the machine
-// it was written on. Packages are named `<vendor>-aircraft-<model>`, so the
-// vendor falls out of the folder names for free.
-const SEED_VENDOR_TOKENS = [
-  // Sim-internal and abbreviation forms that no folder name spells out.
-  'asobo', 'microsoft', 'ms', 'msfs', 'fs20', 'fs24', 'ini', 'wt',
-  // Authors whose folders do not follow the `-aircraft-` convention.
-  'mscarenado', 'duckworks', 'denarq', 'fenix', 'tfdi', 'aerosoft',
-];
+// This list is LEARNED from the library being scanned rather than written
+// down, because a written list is only ever right for the library it was
+// written against: the first version of it was already missing four vendors
+// present on the machine it was written on, and no list can anticipate a
+// developer who ships their first aircraft tomorrow.
+//
+// Only sim-internal forms are seeded. These are not studios with a manifest
+// to read, so there is nothing to learn them from.
+const SEED_VENDOR_TOKENS = ['asobo', 'microsoft', 'ms', 'msfs', 'fs20', 'fs24', 'ini', 'wt'];
 
-/** Tokens treated as a developer prefix; grows as a library is scanned. */
+/** Tokens treated as a developer prefix; learned afresh on every scan. */
 let vendorTokens = new Set(SEED_VENDOR_TOKENS);
 
 /** `pmdg-aircraft-738` and `fs24-asobo-aircraft-c172` both name their vendor. */
 const VENDOR_FROM_FOLDER = /^(?:fs2[04]-)?([a-z0-9]+)-aircraft-/;
 
+/** Any leading folder segment, for packages ignoring the convention above. */
+const LEADING_SEGMENT = /^(?:fs2[04]-)?([a-z]{2,})[-_]/;
+
+// Words that pad out a studio name without identifying the studio. Dropping
+// these is what lets "Just Flight" match a `justflight-` folder while
+// "Fenix Simulations" does not go looking for `simulations-`.
+const CREATOR_NOISE = new Set([
+  'simulations', 'simulation', 'sims', 'sim', 'studio', 'studios', 'design',
+  'designs', 'software', 'interactive', 'entertainment', 'group', 'team',
+  'development', 'developments', 'productions', 'aircraft', 'aviation',
+  'digital', 'works', 'project', 'projects', 'inc', 'llc', 'ltd', 'limited',
+  'gmbh', 'co', 'the', 'and', 'livery', 'liveries', 'repaint', 'repaints',
+]);
+
+/** Identifying words from a declared `creator`, plus their joined form. */
+function creatorTokens(creator) {
+  const words = String(creator || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 1 && !CREATOR_NOISE.has(word));
+  const tokens = new Set(words);
+  if (words.length > 1) tokens.add(words.join(''));
+  return tokens;
+}
+
+/** Whether a folder segment is recognisably the same studio as `creator`. */
+function segmentEchoesCreator(segment, creator) {
+  for (const token of creatorTokens(creator)) {
+    if (token === segment) return true;
+    // Substring either way, so `mscarenado-` matches Carenado and
+    // `justflight-` matches Just Flight. Guarded on length because a
+    // two-letter token matches almost anything.
+    if (token.length >= 4 && segment.includes(token)) return true;
+    if (segment.length >= 4 && token.includes(segment)) return true;
+  }
+  return false;
+}
+
 /**
  * Learn the developer prefixes actually present in this install, so the app
  * behaves the same for a library full of add-ons nobody anticipated.
+ *
+ * Three signals, strongest first:
+ *   1. the `<vendor>-aircraft-<model>` convention, which names the vendor;
+ *   2. a leading segment that echoes the package's declared `creator`, which
+ *      catches abbreviations the convention would miss (`mscarenado-c337`);
+ *   3. a leading segment one creator uses across several packages, which
+ *      catches abbreviations that resemble nothing in the studio's name
+ *      (`fnx-` for Fenix, `bksq-` for Black Square).
  */
-function learnVendorTokens(folderNames) {
+function learnVendorTokens(packages) {
   vendorTokens = new Set(SEED_VENDOR_TOKENS);
-  for (const name of folderNames) {
-    const match = VENDOR_FROM_FOLDER.exec(String(name).toLowerCase());
-    if (match) vendorTokens.add(match[1]);
+  const segmentsByCreator = new Map();
+
+  for (const pkg of packages) {
+    const folder = String(pkg.folderName || '').toLowerCase();
+
+    const declared = VENDOR_FROM_FOLDER.exec(folder);
+    if (declared) vendorTokens.add(declared[1]);
+
+    const creator = String(pkg.creator || '').trim();
+    const leading = LEADING_SEGMENT.exec(folder);
+    if (!creator || !leading) continue;
+    const segment = leading[1];
+    if (NOISE_TOKENS.has(segment)) continue;
+
+    if (segmentEchoesCreator(segment, creator)) {
+      vendorTokens.add(segment);
+      continue;
+    }
+
+    const key = creator.toLowerCase();
+    if (!segmentsByCreator.has(key)) segmentsByCreator.set(key, new Map());
+    const counts = segmentsByCreator.get(key);
+    counts.set(segment, (counts.get(segment) || 0) + 1);
   }
+
+  // Rule 3. One package is not evidence: a studio shipping a single
+  // `douglas-dc3` would teach us to strip "douglas" from every key. Two
+  // packages sharing a segment under one creator is a house prefix.
+  //
+  // Three characters minimum, because this is the weakest of the rules: it
+  // infers a prefix from repetition alone, with nothing the author declared
+  // to confirm it, and a two-letter token strips too much. Rules 1 and 2 have
+  // that confirmation, so they accept shorter tokens.
+  for (const counts of segmentsByCreator.values()) {
+    for (const [segment, count] of counts) {
+      if (count > 1 && segment.length >= 3) vendorTokens.add(segment);
+    }
+  }
+
   return vendorTokens;
 }
 
@@ -473,6 +552,24 @@ function aliasKeys(aircraft) {
       aliases.add(squashed.slice(manufacturer.length));
     }
   }
+
+  // Last resort, and the only rule here that needs no vocabulary at all: drop
+  // the leading segment of the airframe folder. Authors prefix those with a
+  // studio tag the package folder never mentions — `MSCarenado_D18S`,
+  // `JF_PA28_TurboArrow_IV` — so no amount of learning from package names or
+  // declared creators can recover it. Stripping the segment positionally
+  // works for a studio nobody has heard of yet.
+  //
+  // Guarded so it cannot eat an identity: the dropped segment must be a word
+  // rather than a model number, and what remains must still carry a digit and
+  // enough length to be a specific aircraft. That keeps `737-800` intact and
+  // stops `FNX_32X` collapsing to a bare `32x`.
+  const segments = String(aircraft.key).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  if (segments.length > 1 && /^[a-z]+$/.test(segments[0])) {
+    const remainder = squash(segments.slice(1).join(''));
+    if (remainder.length >= 4 && /\d/.test(remainder)) aliases.add(remainder);
+  }
+
   aliases.delete('');
   return [...aliases];
 }
@@ -770,7 +867,7 @@ async function scanAll(options = {}) {
 
   // Merge unsealed first so a Community base wins the identity fields, then
   // let streamed packages fill in whatever is left.
-  learnVendorTokens(allPackages.map((pkg) => pkg.folderName));
+  learnVendorTokens(allPackages);
 
   // Aircraft first, so a livery pack can be handed to the aircraft it paints.
   const pendingLiveries = new Map();
@@ -809,6 +906,10 @@ async function scanAll(options = {}) {
       // Aircraft the category heuristics could not place.
       uncategorised: aircraft.filter((entry) => entry.category === 'Other').map((entry) => entry.name),
       vendorTokensLearned: vendorTokens.size,
+      // The tokens themselves, not just how many: if a developer's liveries
+      // land on the wrong aircraft, whether their prefix was learned is the
+      // first thing worth knowing.
+      vendorTokens: [...vendorTokens].sort(),
     },
     stats: {
       foldersScanned: scanned,

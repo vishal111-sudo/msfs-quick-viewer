@@ -898,6 +898,7 @@ async function openSettings() {
     section.append(list);
 
     for (const [label, items] of [
+      ['Developer tags', diag.vendorTokens || []],
       ['Not in catalog', diag.unknownStockAircraft],
       ['Uncategorised', diag.uncategorised],
     ]) {
