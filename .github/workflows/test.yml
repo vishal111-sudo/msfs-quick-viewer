@@ -1,0 +1,26 @@
+# Runs the scanner regression tests on every push and pull request.
+#
+# The tests scan the fake add-ons in test/fixtures, never a real sim install,
+# so they need nothing but Node. Windows, because that is the only platform
+# the app ships for and path handling is where it would differ.
+
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The scanner has no runtime dependencies, so there is nothing to
+      # install: skipping `npm ci` also skips downloading Electron.
+      - run: npm test

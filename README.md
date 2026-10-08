@@ -12,6 +12,10 @@ livery galleries.
 and double-click the `.exe`. No installer, no admin rights, nothing to
 configure. It finds your sim on its own.
 
+The first launch shows which install it found and asks whether to fetch photos
+for aircraft that have none on disk, before it reads or downloads anything.
+Every launch after that goes straight to your aircraft.
+
 From a source checkout, the built executable sits in the project root as
 `MSFS-Quick-Viewer-<version>-portable.exe`.
 
@@ -166,6 +170,7 @@ Developer probes run against your real install and print what the scanner sees:
 node scripts/probe-scan.js            # full scan: counts, categories, developers
 node scripts/probe.js <packageName>   # detail for one package
 npx electron scripts/smoke.js         # boot, screenshot, report console errors
+npx electron scripts/probe-first-run.js    # a new user's first launch, screenshotted on a timeline
 npx electron scripts/inspect.js       # contrast and geometry check
 ```
 

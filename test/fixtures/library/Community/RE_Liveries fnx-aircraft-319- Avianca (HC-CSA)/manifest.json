@@ -1,0 +1,8 @@
+{
+  "dependencies": [{ "name": "fnx320" }],
+  "content_type": "AIRCRAFT",
+  "title": "Fenix Airbus A319 - Avianca (N691AV)",
+  "manufacturer": "Airbus",
+  "creator": "RE Liveries",
+  "package_version": "1.0.0"
+}

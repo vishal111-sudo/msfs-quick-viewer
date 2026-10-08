@@ -19,6 +19,23 @@ const problems = [];
 // the smoke run exercises the same settings and art cache as the real thing.
 app.setName('MSFS Quick Viewer');
 
+// ...but on a copy. The run clicks through the welcome screen, which saves
+// `welcomed`, and doing that to the real profile would mean the person
+// running the smoke test never gets to see the welcome screen themselves.
+{
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const real = app.getPath('userData');
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'msfsqv-smoke-'));
+  if (fs.existsSync(real)) {
+    // Chromium's own caches are locked by any running copy of the app and
+    // are not needed; settings and the art cache are.
+    const skip = new Set(['Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'Network']);
+    fs.cpSync(real, copy, { recursive: true, filter: (src) => !skip.has(path.basename(src)) });
+  }
+  app.setPath('userData', copy);
+}
+
 require(path.join(__dirname, '..', 'src', 'main', 'main.js'));
 
 app.whenReady().then(async () => {
@@ -52,6 +69,22 @@ app.whenReady().then(async () => {
     });
     true
   `);
+
+  // A profile that has never seen the welcome screen stops there. Get past it
+  // the way a user would, keeping whatever photo source is already chosen.
+  for (let i = 0; i < 40; i += 1) {
+    const welcome = await win.webContents
+      .executeJavaScript(`(() => {
+        const button = document.querySelector('#welcome:not([hidden]) .button.primary');
+        if (!button) return document.getElementById('welcome').hidden ? 'none' : 'loading';
+        button.click();
+        return 'clicked';
+      })()`)
+      .catch(() => 'loading');
+    if (welcome === 'clicked') console.log('SMOKE welcome: dismissed');
+    if (welcome !== 'loading') break;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 
   // Poll the page until the splash is gone or we run out of patience.
   const deadline = Date.now() + 60000;

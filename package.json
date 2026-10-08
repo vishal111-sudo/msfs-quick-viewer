@@ -12,7 +12,8 @@
     "icon": "electron scripts/make-icon.js",
     "smoke": "electron scripts/smoke.js",
     "scan": "node scripts/probe-scan.js",
-    "dist": "electron-builder --win portable && node scripts/place-exe.js"
+    "dist": "electron-builder --win portable && node scripts/place-exe.js",
+    "test": "node --test"
   },
   "build": {
     "appId": "com.msfsquickviewer.app",

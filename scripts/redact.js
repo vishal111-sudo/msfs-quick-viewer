@@ -36,9 +36,28 @@ const REDACT_SOURCE = String.raw`(() => {
  *
  * A failure here must not pass silently: a screenshot that was supposed to be
  * redacted and was not is worse than no screenshot at all.
+ *
+ * It also waits for the redacted text to reach the screen. capturePage() can
+ * hand back the last composited frame, and without this wait a capture taken
+ * straight after redacting showed the original paths: the DOM had changed,
+ * the pixels had not.
  */
 async function redactForScreenshot(win) {
-  return win.webContents.executeJavaScript(REDACT_SOURCE);
+  const changed = await win.webContents.executeJavaScript(REDACT_SOURCE);
+
+  // Force a repaint rather than hoping for one. requestAnimationFrame alone is
+  // not enough: Chromium pauses it for a window sitting behind others, and an
+  // unbounded wait on it hung a whole smoke run. So ask for the repaint
+  // directly, give frames a bounded chance to land, and move on.
+  win.webContents.invalidate();
+  await win.webContents.executeJavaScript(
+    `Promise.race([
+      new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      new Promise((resolve) => setTimeout(resolve, 300)),
+    ])`,
+  );
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  return changed;
 }
 
 module.exports = { REDACT_SOURCE, redactForScreenshot };

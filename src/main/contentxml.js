@@ -30,6 +30,9 @@ function variants(name) {
  */
 async function readContentState(appDataDir) {
   const states = new Map();
+  // A folder added by hand with no sim profile behind it: without this guard
+  // `path.join('', 'Content.xml')` reads whatever is in the working directory.
+  if (!appDataDir) return states;
   let text;
   try {
     text = await fsp.readFile(path.join(appDataDir, 'Content.xml'), 'utf8');

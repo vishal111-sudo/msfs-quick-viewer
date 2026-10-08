@@ -4,9 +4,9 @@ const path = require('node:path');
 const fsp = require('node:fs/promises');
 const { pathToFileURL } = require('node:url');
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, net, protocol, shell } = require('electron');
 
-const { scanAll } = require('./scanner');
+const { scanAll, listInstalls } = require('./scanner');
 const { resolvePackagesRoot, candidateLocations } = require('./roots');
 const { JsonStore, DEFAULT_SETTINGS } = require('./store');
 const { ArtCache } = require('./art');
@@ -242,6 +242,16 @@ function registerIpc() {
   /** Where an install is looked for, so the app can say so when it finds none. */
   ipcMain.handle('roots:candidates', () => candidateLocations());
 
+  // What would be scanned, without scanning it: the welcome screen names the
+  // installs it found before the user commits to anything.
+  ipcMain.handle('installs:list', async () =>
+    (await listInstalls(settings.get('extraRoots'))).map((install) => ({
+      sim: install.sim,
+      store: install.store,
+      packagesRoot: install.packagesRoot,
+    })),
+  );
+
   ipcMain.handle('roots:remove', async (_event, dir) => {
     const extraRoots = settings.get('extraRoots').filter((root) => root !== dir);
     await settings.set({ extraRoots });
@@ -257,7 +267,6 @@ async function createWindow() {
     minHeight: 600,
     backgroundColor: '#12151b',
     show: false,
-    autoHideMenuBar: true,
     title: 'MSFS Quick Viewer',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -278,6 +287,13 @@ async function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // No menu bar at all. `autoHideMenuBar` only hid Electron's stock
+  // File / Edit / View / Window menu, and pressing Alt brought it back: a
+  // developer menu (reload, dev tools, zoom) this app has no use for.
+  // Text editing shortcuts in the search box are handled by Chromium itself
+  // on Windows, so nothing a user relies on lived in that menu.
+  Menu.setApplicationMenu(null);
+
   const userData = app.getPath('userData');
   await fsp.mkdir(userData, { recursive: true });
 

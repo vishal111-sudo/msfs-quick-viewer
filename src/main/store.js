@@ -66,6 +66,8 @@ const DEFAULT_SETTINGS = {
   lastFilters: null,
   /** Hide aircraft the sim's Content Manager has disabled. */
   hideDisabled: false,
+  /** Whether the one-time welcome screen has been seen and dismissed. */
+  welcomed: false,
 };
 
 module.exports = { JsonStore, DEFAULT_SETTINGS };

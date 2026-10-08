@@ -42,7 +42,8 @@ async function listDirs(dir) {
 }
 
 /** Collect the raw package records under one install. */
-async function scanInstall(install, onProgress) {
+/** Everything one install will need reading, listed before any of it is read. */
+async function planInstall(install) {
   const packageDirs = await resolvePackageDirs(install.packagesRoot);
   const contentState = await readContentState(install.appDataDir);
 
@@ -52,8 +53,10 @@ async function scanInstall(install, onProgress) {
       jobs.push({ spec, folderName, dir: path.join(spec.dir, folderName) });
     }
   }
+  return { install, contentState, jobs };
+}
 
-  let done = 0;
+async function scanInstall({ install, contentState, jobs }, onJobDone) {
   const packages = await mapLimit(jobs, CONCURRENCY, async (job) => {
     const options = { source: job.spec.source, label: job.spec.label };
     let pkg = null;
@@ -66,8 +69,7 @@ async function scanInstall(install, onProgress) {
       if (process.env.MSFSQV_DEBUG) console.error('scan failed', job.dir, err.message);
     }
 
-    done += 1;
-    if (onProgress && done % 25 === 0) onProgress({ done, total: jobs.length });
+    onJobDone(job);
 
     if (!pkg) return null;
     pkg.install = install.id;
@@ -76,8 +78,45 @@ async function scanInstall(install, onProgress) {
     return pkg;
   });
 
-  if (onProgress) onProgress({ done: jobs.length, total: jobs.length });
   return { scanned: jobs.length, packages: packages.filter(Boolean) };
+}
+
+/**
+ * Rate-limit progress messages by time rather than by count.
+ *
+ * Counting was the old approach (one message every 25 packages) and it hid
+ * the slow part entirely: streamed stock packages finish in microseconds
+ * while a handful of large add-ons take seconds each, so the count reached
+ * 1475 of 1494 almost at once and then said nothing until the end. Timed
+ * messages report each slow add-on as it lands, and a stage change is always
+ * sent at once.
+ */
+function progressReporter(onProgress, intervalMs = 80) {
+  if (!onProgress) return () => {};
+  let last = 0;
+  return (progress, force = false) => {
+    const now = Date.now();
+    if (!force && now - last < intervalMs) return;
+    last = now;
+    onProgress(progress);
+  };
+}
+
+/**
+ * Detected installs plus any packages roots the user added by hand. Exposed on
+ * its own so the welcome screen can say what was found before scanning it.
+ */
+async function listInstalls(extraRoots = []) {
+  const installs = await detectInstalls();
+  for (const root of extraRoots || []) {
+    if (installs.some((install) => install.packagesRoot === root)) continue;
+    installs.push(customInstall(root, installs[0] ? installs[0].appDataDir : ''));
+  }
+  return installs;
+}
+
+function customInstall(root, appDataDir = '') {
+  return { id: `Custom:${root}`, sim: 'Custom', store: 'Manual', appDataDir, packagesRoot: root };
 }
 
 function liveryId(aircraftId, name, index) {
@@ -105,6 +144,14 @@ function newAircraft(id, key) {
     hasBase: false,
     /** Creator of the package that actually ships the aircraft, not a livery. */
     primaryDeveloper: undefined,
+    /**
+     * Packages that supplied the airframe itself, as opposed to paint. The
+     * aircraft's version is one of these: the Fenix A320's livery packs are
+     * at 3.0 while the aircraft is 2.4.0.4720, and some livery packs even
+     * declare `content_type: AIRCRAFT`, so "any package with a version"
+     * reports the wrong number.
+     */
+    basePackages: [],
     developers: new Set(),
     packages: [],
     liveries: [],
@@ -186,6 +233,28 @@ function packageSummary(pkg) {
 /** Source ranking: a Community add-on outranks the stock streamed package. */
 const SOURCE_RANK = { Community: 3, Official: 2, Streamed: 1 };
 
+/**
+ * The installed version of an aircraft: `package_version` from the manifest
+ * of the package that ships the airframe, never from a livery pack.
+ *
+ * Stock aircraft streamed by the sim have no manifest to read (only an
+ * encrypted `content` folder), so they have no version here; they update with
+ * the sim. Should several packages supply the same airframe, an add-on beats
+ * a marketplace package beats the stock one, and a package declaring itself
+ * an aircraft beats one that does not.
+ */
+function versionOf(aircraft) {
+  const candidates = aircraft.basePackages.filter((pkg) => pkg.version);
+  if (!candidates.length) return { version: undefined, versionPackage: undefined };
+  const rank = (pkg) => [SOURCE_RANK[pkg.source] || 0, pkg.contentType === 'AIRCRAFT' ? 1 : 0];
+  candidates.sort((a, b) => {
+    const [x, y] = [rank(a), rank(b)];
+    return y[0] - x[0] || y[1] - x[1];
+  });
+  const chosen = candidates[0];
+  return { version: String(chosen.version), versionPackage: chosen.title || chosen.folderName };
+}
+
 /** `douglas-dc3-livery-bluestripe` is a livery of `douglas-dc3`, not an aircraft. */
 function baseAirframeKey(key) {
   return key.replace(/[-_ ]liver(?:y|ies)[-_ ].*$/i, '');
@@ -236,15 +305,17 @@ function mergeUnsealed(byKey, pkg, pending) {
     // `douglas-dc3-livery-bluestripe` names itself a livery of `douglas-dc3`,
     // so whatever its cfg declares, it is paint rather than a new aircraft.
     const liveryFolder = frame.key !== frameKey;
-    const groups = liveryOnlyPackage || liveryFolder ? [] : frame.groups || [];
+    const groups = liveryOnlyPackage || liveryFolder || frame.baseContainer ? [] : frame.groups || [];
 
     // Nothing here declares an aircraft, so these liveries belong to whichever
-    // aircraft another package declares for the same airframe folder.
+    // aircraft another package declares for the same airframe folder, or for
+    // the one a variation names as its base.
     if (!groups.length) {
       if (frame.liveries.length) {
-        const queue = pending.get(frameKey) || [];
-        for (const livery of frame.liveries) queue.push({ livery, pkg });
-        pending.set(frameKey, queue);
+        const routeKey = frame.baseContainer ? baseAirframeKey(frame.baseContainer.toLowerCase()) : frameKey;
+        const queue = pending.get(routeKey) || [];
+        for (const livery of frame.liveries) queue.push({ livery, pkg, declaredBase: frame.baseContainer });
+        pending.set(routeKey, queue);
       }
       continue;
     }
@@ -264,6 +335,9 @@ function mergeUnsealed(byKey, pkg, pending) {
       notePackage(aircraft, pkg);
 
       aircraft.hasBase = true;
+      if (!aircraft.basePackages.some((entry) => entry.folderName === pkg.folderName)) {
+        aircraft.basePackages.push(packageSummary(pkg));
+      }
       // Whoever ships the aircraft owns it, even if a livery pack was scanned
       // first — otherwise PMDG's 737 is credited to a livery author.
       if (!aircraft.primaryDeveloper && pkg.creator) aircraft.primaryDeveloper = pkg.creator;
@@ -310,9 +384,77 @@ function mergeUnsealed(byKey, pkg, pending) {
  * folder, which may now hold several aircraft, so the livery's own tags decide
  * which one — a WestJet 737-800 paint must not land on the BBJ2.
  */
+/** Model designations an aircraft is known by, squashed: `a319`, `737800`. */
+function designationsOf(aircraft) {
+  return [aircraft.icaoType, aircraft.model]
+    .map((value) => squash(value || ''))
+    .filter((value) => value.length >= 3 && /\d/.test(value));
+}
+
+/** Whether an aircraft comes from the developer whose prefix is `vendor`. */
+function sharesVendor(aircraft, vendor) {
+  const names = [aircraft.frameKey || aircraft.key || '', ...aircraft.packages.map((pkg) => pkg.folderName)];
+  return names.some((name) => {
+    const bare = String(name).toLowerCase().replace(/^fs2[04]-/, '');
+    return bare === vendor || bare.startsWith(`${vendor}-`) || bare.startsWith(`${vendor}_`);
+  });
+}
+
+/**
+ * The installed aircraft a variation belongs to, when the airframe folder it
+ * names is not installed under that name.
+ *
+ * Variations often point at an older folder: RE Liveries' Avianca A319 names
+ * `FNX_319_CFM`, Fenix's MSFS 2020 folder, while the installed aircraft lives
+ * in `FNX_32X`. Two things still identify it: the developer prefix (`fnx`,
+ * learned at scan time) narrows the field to Fenix aircraft, and the model
+ * designation (`A319`) appears in the variation's own name and titles.
+ *
+ * Returns null rather than guessing when two aircraft match equally well; the
+ * livery then gets a card of its own and shows up in Scan diagnostics.
+ */
+function findVariationBase(routeKey, queue, byKey) {
+  const text = squash(
+    [routeKey, ...queue.map(({ livery, pkg }) => `${livery.name} ${livery.title || ''} ${pkg.title || ''}`)].join(' '),
+  );
+  const segments = routeKey.split(/[^a-z0-9]+/).filter(Boolean);
+  const vendor = segments.length > 1 && vendorTokens.has(segments[0]) ? segments[0] : null;
+
+  let best = null;
+  let bestLength = 0;
+  let tied = false;
+  for (const aircraft of byKey.values()) {
+    if (!aircraft.hasBase) continue;
+    if (vendor && !sharesVendor(aircraft, vendor)) continue;
+    for (const designation of designationsOf(aircraft)) {
+      if (!text.includes(designation)) continue;
+      if (designation.length > bestLength) {
+        best = aircraft;
+        bestLength = designation.length;
+        tied = false;
+      } else if (designation.length === bestLength && aircraft !== best) {
+        tied = true;
+      }
+    }
+  }
+  return tied ? null : best;
+}
+
 function routePendingLiveries(byKey, pending) {
   for (const [frameKey, queue] of pending) {
     const candidates = [...byKey.values()].filter((aircraft) => aircraft.frameKey === frameKey);
+
+    // A variation whose named base is not installed under that name.
+    if (!candidates.length && queue.some((entry) => entry.declaredBase)) {
+      const base = findVariationBase(frameKey, queue, byKey);
+      if (base) {
+        for (const { livery, pkg } of queue) {
+          notePackage(base, pkg);
+          addLivery(base, livery, pkg);
+        }
+        continue;
+      }
+    }
 
     if (!candidates.length) {
       // No package declared this airframe, so the pack stands on its own.
@@ -612,6 +754,7 @@ function containmentScore(baseKey, liverySquashed) {
 /** Move one aircraft's packages and liveries onto another, then drop it. */
 function foldInto(target, source) {
   target.packages.push(...source.packages);
+  target.basePackages.push(...source.basePackages);
   for (const developer of source.developers) target.developers.add(developer);
 
   // A community mod usually wins the display name, but the stock entry it
@@ -809,6 +952,7 @@ function finalise(aircraft) {
     developer: aircraft.primaryDeveloper || developers[0],
     packages: aircraft.packages,
     packageCount: aircraft.packages.length,
+    ...versionOf(aircraft),
     liveries: aircraft.liveries,
     liveryCount: aircraft.liveries.length,
     liveriesWithArt,
@@ -838,32 +982,61 @@ function finalise(aircraft) {
  * Scan every detected install and aggregate the result into aircraft records.
  * @param {object} [options]
  * @param {string[]} [options.extraRoots] additional packages roots to include
+ * @param {string[]} [options.roots] scan only these packages roots, skipping detection
  * @param {(progress: object) => void} [options.onProgress]
  */
 async function scanAll(options = {}) {
   const startedAt = Date.now();
-  const installs = await detectInstalls();
+  const report = progressReporter(options.onProgress);
 
-  for (const root of options.extraRoots || []) {
-    if (installs.some((install) => install.packagesRoot === root)) continue;
-    installs.push({
-      id: `Custom:${root}`,
-      sim: 'Custom',
-      store: 'Manual',
-      appDataDir: installs[0] ? installs[0].appDataDir : '',
-      packagesRoot: root,
-    });
+  report({ stage: 'detect' }, true);
+  // `roots` scans exactly those folders and nothing detected on this machine,
+  // which is what lets the tests run identically anywhere.
+  const installs = options.roots
+    ? options.roots.map((root) => customInstall(root))
+    : await listInstalls(options.extraRoots);
+
+  // Plan every install before reading any of them, so progress covers the
+  // whole scan rather than restarting per install.
+  const plans = [];
+  for (const install of installs) plans.push(await planInstall(install));
+
+  // Add-ons and stock packages are counted apart because they cost wildly
+  // different amounts: a streamed stock package is a folder name, an add-on
+  // is a tree of cfg files. Only the add-on count tracks elapsed time.
+  const progress = {
+    stage: 'read',
+    installs: installs.map((install) => ({ sim: install.sim, store: install.store })),
+    addonsDone: 0,
+    addonsTotal: 0,
+    stockDone: 0,
+    stockTotal: 0,
+  };
+  for (const plan of plans) {
+    for (const job of plan.jobs) {
+      if (job.spec.sealed) progress.stockTotal += 1;
+      else progress.addonsTotal += 1;
+    }
   }
+  report(progress, true);
+
+  const onJobDone = (job) => {
+    if (job.spec.sealed) progress.stockDone += 1;
+    else progress.addonsDone += 1;
+    report(progress);
+  };
 
   const byKey = new Map();
   let scanned = 0;
   const allPackages = [];
 
-  for (const install of installs) {
-    const result = await scanInstall(install, options.onProgress);
+  for (const plan of plans) {
+    const result = await scanInstall(plan, onJobDone);
     scanned += result.scanned;
     allPackages.push(...result.packages);
   }
+
+  report({ ...progress, stage: 'match' }, true);
 
   // Merge unsealed first so a Community base wins the identity fields, then
   // let streamed packages fill in whatever is left.
@@ -905,6 +1078,13 @@ async function scanAll(options = {}) {
       ].sort(),
       // Aircraft the category heuristics could not place.
       uncategorised: aircraft.filter((entry) => entry.category === 'Other').map((entry) => entry.name),
+      // Cards made entirely of paint: a livery whose aircraft was not found.
+      // Either that aircraft is not installed, or this is a packaging pattern
+      // the matching does not know yet. Zero on a clean library, which is
+      // what makes it worth listing.
+      liveriesWithoutAircraft: aircraft
+        .filter((entry) => !entry.hasBase)
+        .map((entry) => entry.packages.map((pkg) => pkg.title || pkg.folderName).join(', ') || entry.name),
       vendorTokensLearned: vendorTokens.size,
       // The tokens themselves, not just how many: if a developer's liveries
       // land on the wrong aircraft, whether their prefix was learned is the
@@ -923,4 +1103,4 @@ async function scanAll(options = {}) {
   };
 }
 
-module.exports = { scanAll };
+module.exports = { scanAll, listInstalls };

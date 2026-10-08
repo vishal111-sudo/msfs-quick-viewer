@@ -20,8 +20,15 @@ const el = {
   settingsClose: document.getElementById('settings-close'),
   openSettings: document.getElementById('open-settings'),
   splash: document.getElementById('splash'),
-  splashText: document.getElementById('splash-text'),
-  splashSub: document.getElementById('splash-sub'),
+  splashInstall: document.getElementById('splash-install'),
+  stageCount: document.getElementById('stage-count'),
+  stageBar: document.getElementById('stage-bar'),
+  welcome: document.getElementById('welcome'),
+  welcomePanel: document.getElementById('welcome-panel'),
+  photoNotice: document.getElementById('photo-notice'),
+  photoNoticeText: document.getElementById('photo-notice-text'),
+  photoNoticeOff: document.getElementById('photo-notice-off'),
+  photoNoticeClose: document.getElementById('photo-notice-close'),
   toast: document.getElementById('toast'),
   artProgress: document.getElementById('art-progress'),
   artProgressText: document.getElementById('art-progress-text'),
@@ -38,10 +45,18 @@ const state = {
   filters: new Map(),
   /** aircraft id -> art record resolved from cache or the network */
   art: new Map(),
-  /** aircraft ids whose art request is already running */
-  artInFlight: new Set(),
+  /**
+   * aircraft id -> promise of the art request already running. A promise, not
+   * a flag, so a second caller can wait for the first instead of assuming it.
+   */
+  artInFlight: new Map(),
   /** Bound while the detail drawer is open, so Ctrl+V knows the target. */
   pasteThumbnail: null,
+  /**
+   * True from the welcome screen until the first photo sweep ends. That sweep
+   * is the one that downloads everything, so it is the one worth explaining.
+   */
+  explainPhotos: false,
 };
 
 /**
@@ -49,9 +64,11 @@ const state = {
  *
  * Without this the lookups would only fire for cards scrolled into view, and
  * a progress bar would sit at a few percent looking broken. `token` lets a
- * rescan or a source change abandon a sweep already in flight.
+ * rescan or a source change abandon a sweep already in flight. `startedAt`
+ * feeds the time estimate, which is measured rather than assumed because the
+ * request rate depends on how hard the photo source is pushing back.
  */
-const sweep = { token: 0, done: 0, total: 0, running: false };
+const sweep = { token: 0, ids: [], done: 0, total: 0, running: false, startedAt: 0 };
 
 const FACETS = [
   { key: 'category', label: 'Category', of: (a) => a.category },
@@ -147,9 +164,41 @@ function visibleAircraft() {
 
 /* ---------- sidebar facets ---------- */
 
+/** How many facet values are ticked, across every group. */
+function selectedCount() {
+  let total = 0;
+  for (const values of state.filters.values()) total += values.size;
+  return total;
+}
+
+function clearFacet(facetKey) {
+  state.filters.delete(facetKey);
+  render();
+  persistFilters();
+}
+
+/** Untick every sidebar filter. The search box is left alone: it is not one. */
+function clearFacetFilters() {
+  state.filters.clear();
+  render();
+  persistFilters();
+}
+
 function renderFacets() {
   el.facets.replaceChildren();
   if (!state.scan) return;
+
+  // Header with a single way out of every selection at once. Present even
+  // when nothing is ticked, so the sidebar does not jump when it appears.
+  const ticked = selectedCount();
+  const head = node('div', 'facets-head');
+  head.append(node('span', 'facets-title', ticked ? `Filters · ${ticked}` : 'Filters'));
+  const clearAll = node('button', 'facets-clear', 'Clear all');
+  clearAll.type = 'button';
+  clearAll.disabled = ticked === 0;
+  clearAll.addEventListener('click', clearFacetFilters);
+  head.append(clearAll);
+  el.facets.append(head);
 
   for (const facet of FACETS) {
     // Count against everything except this facet's own selection, so picking
@@ -164,10 +213,27 @@ function renderFacets() {
 
     let entries = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (facet.limit) entries = entries.slice(0, facet.limit);
+
+    // A ticked value must stay on screen, or it becomes a filter nobody can
+    // see or untick: Developer only lists its top 14, and any value can fall
+    // to zero under the other groups' selections.
+    const chosen = selected(facet.key);
+    for (const value of chosen) {
+      if (!entries.some(([shown]) => shown === value)) entries.push([value, counts.get(value) || 0]);
+    }
     if (!entries.length) continue;
 
     const group = node('div', 'facet');
-    group.append(node('h3', null, facet.label));
+    const heading = node('div', 'facet-head');
+    heading.append(node('h3', null, facet.label));
+    if (chosen.size) {
+      const clear = node('button', 'facets-clear', 'Clear');
+      clear.type = 'button';
+      clear.setAttribute('aria-label', `Clear ${facet.label} filters`);
+      clear.addEventListener('click', () => clearFacet(facet.key));
+      heading.append(clear);
+    }
+    group.append(heading);
 
     for (const [value, count] of entries) {
       const button = node('button', 'facet-option');
@@ -219,7 +285,12 @@ function restoreFilters(saved) {
 function artPlaceholder(aircraft) {
   const wrap = node('div', 'placeholder');
   wrap.append(node('span', 'glyph'));
-  wrap.append(node('div', null, aircraft.sealed ? 'Looking for a photo…' : 'No thumbnail'));
+  let label = 'No thumbnail';
+  if (aircraft.sealed) {
+    // Saying "looking" while photos are switched off would be a lie.
+    label = state.settings && state.settings.artSource === 'off' ? 'Photos are off' : 'Looking for a photo…';
+  }
+  wrap.append(node('div', null, label));
   return wrap;
 }
 
@@ -276,6 +347,11 @@ function buildCard(aircraft) {
   if (aircraft.icaoType) meta.append(node('span', 'mono', aircraft.icaoType));
   else if (aircraft.variant) meta.append(node('span', null, aircraft.variant));
   else if (aircraft.engineLabel && aircraft.engineLabel !== 'Unknown') meta.append(node('span', null, aircraft.engineLabel));
+  if (aircraft.version) {
+    const version = node('span', 'card-version mono', `v${aircraft.version}`);
+    version.title = `Version ${aircraft.version} (${aircraft.versionPackage})`;
+    meta.append(version);
+  }
   body.append(meta);
 
   card.append(art, body);
@@ -331,20 +407,31 @@ async function requestArt(aircraftId) {
     showArtOnCard(aircraftId, known);
     return;
   }
-  // Already running: it will repaint the current card when it resolves.
-  if (state.artInFlight.has(aircraftId)) return;
-
-  state.artInFlight.add(aircraftId);
-  try {
-    const art = await api.getArt(aircraftId);
-    state.art.set(aircraftId, art || null);
-    showArtOnCard(aircraftId, art || null);
-  } catch {
-    state.art.set(aircraftId, null);
-    showArtOnCard(aircraftId, null);
-  } finally {
-    state.artInFlight.delete(aircraftId);
+  // Already running: wait for that one rather than starting a second. It
+  // repaints the card itself; returning early instead would let the sweep
+  // move on and finish while lookups were still outstanding.
+  const running = state.artInFlight.get(aircraftId);
+  if (running) {
+    await running;
+    return;
   }
+
+  const lookup = (async () => {
+    try {
+      const art = await api.getArt(aircraftId);
+      state.art.set(aircraftId, art || null);
+      showArtOnCard(aircraftId, art || null);
+    } catch {
+      state.art.set(aircraftId, null);
+      showArtOnCard(aircraftId, null);
+    } finally {
+      state.artInFlight.delete(aircraftId);
+      // Whichever path asked for it, a resolved photo is progress.
+      if (sweep.running) renderArtProgress();
+    }
+  })();
+  state.artInFlight.set(aircraftId, lookup);
+  await lookup;
 }
 
 function paintArt(card, art) {
@@ -363,6 +450,12 @@ function paintArt(card, art) {
 /* ---------- background photo sweep ---------- */
 
 function renderArtProgress() {
+  // Counted from what has resolved, not from how far the sweep loop has got:
+  // cards scrolled into view are served ahead of the sweep, and counting
+  // only the loop left this at 0 while photos visibly arrived.
+  sweep.done = sweep.ids.filter((id) => state.art.has(id)).length;
+  renderPhotoNotice();
+
   const showing = sweep.running && sweep.total > 0;
   el.artProgress.hidden = !showing;
   if (!showing) return;
@@ -370,6 +463,51 @@ function renderArtProgress() {
   const percent = Math.round((sweep.done / sweep.total) * 100);
   el.artProgressText.textContent = `Finding photos ${sweep.done} / ${sweep.total}`;
   el.artProgressBar.style.width = `${percent}%`;
+}
+
+/** "about 3 min", measured from the sweep so far; null until there is data. */
+function sweepEstimate() {
+  // A few lookups in, the average is meaningful; before that it is noise.
+  if (sweep.done < 4) return null;
+  const perItem = (Date.now() - sweep.startedAt) / sweep.done;
+  const remainingMs = perItem * (sweep.total - sweep.done);
+  if (remainingMs < 45_000) return 'under a minute left';
+  return `about ${Math.round(remainingMs / 60_000)} min left`;
+}
+
+/**
+ * The first sweep downloads a photo for every stock aircraft, and three
+ * quarters of the grid shows a placeholder while it runs. Without a word of
+ * explanation that reads as broken, so the first sweep gets one, along with
+ * a way to stop it on the spot.
+ */
+function renderPhotoNotice() {
+  const show = state.explainPhotos && sweep.running && sweep.total > 0;
+  el.photoNotice.hidden = !show;
+  if (!show) return;
+
+  const source = state.settings.artSource === 'commons' ? 'Wikimedia Commons' : 'Wikipedia';
+  const estimate = sweepEstimate();
+  el.photoNoticeText.textContent =
+    `Finding photos for ${sweep.total} aircraft on ${source}` +
+    (estimate ? `, ${estimate}.` : '.') +
+    ' Thumbnails that came with your add-ons are already showing. This only happens once.';
+}
+
+function dismissPhotoNotice() {
+  state.explainPhotos = false;
+  renderPhotoNotice();
+}
+
+async function turnPhotosOff() {
+  state.settings = await api.setSettings({ artSource: 'off' });
+  sweep.token += 1;
+  sweep.running = false;
+  dismissPhotoNotice();
+  renderArtProgress();
+  // Placeholders said "Looking for a photo…"; repaint so they say what is true.
+  render();
+  toast('Photos are off. Turn them back on in Settings.');
 }
 
 /** Everything with no artwork on disk and nothing resolved yet. */
@@ -389,8 +527,10 @@ async function startArtSweep() {
   }
 
   const pending = aircraftNeedingArt();
+  sweep.ids = pending.map((aircraft) => aircraft.id);
   sweep.total = pending.length;
   sweep.done = 0;
+  sweep.startedAt = Date.now();
   sweep.running = pending.length > 0;
   renderArtProgress();
   if (!sweep.running) return;
@@ -402,12 +542,12 @@ async function startArtSweep() {
     // Awaiting one at a time leaves room for a card scrolled into view to be
     // served in between, so browsing stays responsive while this runs.
     if (!state.art.has(aircraft.id)) await requestArt(aircraft.id);
-
-    sweep.done += 1;
     renderArtProgress();
   }
+  if (token !== sweep.token) return;
 
   sweep.running = false;
+  state.explainPhotos = false;
   renderArtProgress();
   const found = pending.filter((a) => state.art.get(a.id)).length;
   if (found) toast(`Found ${found} photo${found === 1 ? '' : 's'}`);
@@ -657,6 +797,12 @@ async function openDetail(aircraftId) {
   detailRow(list, 'Engines', aircraft.engineCount ? `${aircraft.engineCount} × ${aircraft.engineType}` : aircraft.engineType);
   detailRow(list, 'Wake category', aircraft.size);
   detailRow(list, 'Developers', aircraft.developers.join(', '));
+  // Name the package the number came from when there is more than one, since
+  // the livery packs listed below carry versions of their own.
+  let version = aircraft.version;
+  if (version && aircraft.packages.length > 1) version = `${version}  ·  ${aircraft.versionPackage}`;
+  if (!version && aircraft.sealed) version = 'Updates with the sim';
+  detailRow(list, 'Version', version);
   details.append(list);
   el.detailBody.append(details);
 
@@ -895,9 +1041,16 @@ async function openSettings() {
       'Uncategorised',
       diag.uncategorised.length ? `${diag.uncategorised.length} listed under "Other"` : 'none',
     );
+    const orphans = diag.liveriesWithoutAircraft || [];
+    detailRow(
+      list,
+      'Liveries with no aircraft',
+      orphans.length ? `${orphans.length}: aircraft not installed, or not recognised` : 'none',
+    );
     section.append(list);
 
     for (const [label, items] of [
+      ['Liveries with no aircraft', orphans],
       ['Developer tags', diag.vendorTokens || []],
       ['Not in catalog', diag.unknownStockAircraft],
       ['Uncategorised', diag.uncategorised],
@@ -935,10 +1088,46 @@ async function openSettings() {
 
 /* ---------- scanning ---------- */
 
+const STAGES = ['detect', 'read', 'match'];
+
+function installLabel(install) {
+  if (install.sim === 'Custom') return 'Your folder';
+  return `${install.sim.replace('MSFS', 'MSFS ')} · ${install.store}`;
+}
+
+/**
+ * Paint scan progress as a checklist: done stages ticked, the current one
+ * spinning, later ones waiting. The bar follows add-on packages only, since
+ * those are where the time goes; stock packages are a folder name each.
+ */
+function renderScanProgress(progress) {
+  const current = STAGES.indexOf(progress.stage);
+  for (const item of document.querySelectorAll('.stage')) {
+    const index = STAGES.indexOf(item.dataset.stage);
+    item.dataset.state = index < current ? 'done' : index === current ? 'active' : 'waiting';
+  }
+
+  if (progress.installs && progress.installs.length) {
+    el.splashInstall.textContent = progress.installs.map(installLabel).join('  ·  ');
+  }
+
+  if (progress.stage === 'detect') {
+    el.stageCount.textContent = '';
+    el.stageBar.style.width = '0%';
+    return;
+  }
+
+  // An install with no add-ons at all still deserves a moving bar.
+  const useAddons = progress.addonsTotal > 0;
+  const done = useAddons ? progress.addonsDone : progress.stockDone;
+  const total = useAddons ? progress.addonsTotal : progress.stockTotal;
+  el.stageCount.textContent = total ? `${done} / ${total} ${useAddons ? 'add-ons' : 'packages'}` : '';
+  el.stageBar.style.width = progress.stage === 'match' || !total ? '100%' : `${Math.round((done / total) * 100)}%`;
+}
+
 async function rescan() {
   el.splash.hidden = false;
-  el.splashText.textContent = 'Scanning your MSFS packages…';
-  el.splashSub.textContent = '';
+  renderScanProgress({ stage: 'detect' });
   state.art.clear();
 
   try {
@@ -1002,21 +1191,152 @@ document.addEventListener('paste', () => {
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeDrawers();
-  if (event.key === '/' && document.activeElement !== el.search) {
+  // The search box is behind the welcome screen; don't steal focus into it.
+  if (event.key === '/' && document.activeElement !== el.search && el.welcome.hidden) {
     event.preventDefault();
     el.search.focus();
     el.search.select();
   }
 });
 
-api.onScanProgress(({ done, total }) => {
-  el.splashSub.textContent = `${done} / ${total} packages`;
-});
+api.onScanProgress(renderScanProgress);
+
+el.photoNoticeOff.addEventListener('click', turnPhotosOff);
+el.photoNoticeClose.addEventListener('click', dismissPhotoNotice);
+
+/* ---------- welcome ---------- */
+
+/**
+ * Shown once, before the first scan. It answers the three things a new user
+ * cannot otherwise know: what this is, which sim install it is about to read,
+ * and that it will go online for photos unless told not to.
+ */
+async function showWelcome() {
+  el.splash.hidden = true;
+  el.welcome.hidden = false;
+
+  const [installs, sources] = await Promise.all([
+    api.listInstalls().catch(() => []),
+    api.artSources().catch(() => ({ sources: [], current: 'wikipedia' })),
+  ]);
+
+  const panel = el.welcomePanel;
+  panel.replaceChildren();
+
+  const head = node('header', 'welcome-head');
+  head.append(node('span', 'brand-mark'));
+  head.append(node('h1', 'welcome-title', 'MSFS Quick Viewer'));
+  head.querySelector('h1').id = 'welcome-title';
+  panel.append(head);
+  panel.append(
+    node(
+      'p',
+      'welcome-lede',
+      'Every aircraft you have installed, with its liveries, in one grid. ' +
+        'It only reads your sim folders and never changes them.',
+    ),
+  );
+
+  // Which install is about to be read.
+  const found = node('section', 'welcome-section');
+  found.append(node('h2', 'welcome-label', installs.length ? 'Found' : 'No sim found yet'));
+  if (installs.length) {
+    const list = node('ul', 'install-list');
+    for (const install of installs) {
+      const item = node('li', 'install');
+      item.append(node('span', 'install-name', installLabel(install)));
+      item.append(node('span', 'install-path', install.packagesRoot));
+      list.append(item);
+    }
+    found.append(list);
+  } else {
+    found.append(
+      node(
+        'p',
+        'welcome-note',
+        'Steam and Microsoft Store installs of MSFS 2024 and 2020 are found automatically, ' +
+          'and none turned up. Point the app at your Community folder instead.',
+      ),
+    );
+  }
+  const choose = node(
+    'button',
+    installs.length ? 'link' : 'button',
+    installs.length ? 'Not the right one? Choose a folder…' : 'Choose your Community folder…',
+  );
+  choose.type = 'button';
+  choose.addEventListener('click', async () => {
+    const result = await api.addRoot();
+    if (result.added) await showWelcome();
+    else if (result.reason === 'not-a-packages-root') toast('That folder has no Community or StreamedPackages inside it');
+  });
+  found.append(choose);
+  panel.append(found);
+
+  // Photos, decided up front, because choosing them means going online.
+  const photos = node('section', 'welcome-section');
+  photos.append(node('h2', 'welcome-label', 'Photos for aircraft without a thumbnail'));
+  const options = node('div', 'choice-list');
+  options.setAttribute('role', 'radiogroup');
+  options.setAttribute('aria-label', 'Photo source');
+  const choices = [
+    ...sources.sources.map((source) => ({ id: source.id, label: source.label, note: source.note })),
+    { id: 'off', label: 'Off', note: 'No network access at all. Stock aircraft show a placeholder.' },
+  ];
+  let chosen = state.settings.artSource || sources.current || 'wikipedia';
+  for (const choice of choices) {
+    const label = node('label', 'choice');
+    const input = node('input');
+    input.type = 'radio';
+    input.name = 'welcome-art-source';
+    input.value = choice.id;
+    input.checked = choice.id === chosen;
+    input.addEventListener('change', () => {
+      chosen = choice.id;
+    });
+    const text = node('span', 'choice-text');
+    text.append(node('span', 'choice-label', choice.label));
+    text.append(node('span', 'choice-note', choice.note));
+    label.append(input, text);
+    options.append(label);
+  }
+  photos.append(options);
+  photos.append(
+    node(
+      'p',
+      'welcome-note',
+      'Stock aircraft ship encrypted, with no picture on disk. Each is looked up once by name ' +
+        'and the photo is kept on this PC.',
+    ),
+  );
+  panel.append(photos);
+
+  const footer = node('footer', 'welcome-foot');
+  footer.append(node('p', 'welcome-note', 'You can change any of this later in Settings.'));
+  const start = node('button', 'button primary', 'Scan my aircraft');
+  start.type = 'button';
+  start.disabled = installs.length === 0;
+  start.addEventListener('click', async () => {
+    start.disabled = true;
+    state.settings = await api.setSettings({ artSource: chosen, welcomed: true });
+    state.explainPhotos = chosen !== 'off';
+    el.welcome.hidden = true;
+    await rescan();
+  });
+  footer.append(start);
+  panel.append(footer);
+
+  (installs.length ? start : choose).focus();
+}
 
 (async function start() {
   state.settings = await api.getSettings();
   applyTheme(state.settings.theme);
   setCardSize(state.settings.cardSize || 'medium');
   restoreFilters(state.settings.lastFilters);
+  if (!state.settings.welcomed) {
+    await showWelcome();
+    return;
+  }
   await rescan();
 })();

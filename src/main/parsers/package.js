@@ -377,6 +377,26 @@ function groupVariants(variants, liveries, facts = {}) {
   return groups;
 }
 
+/**
+ * The airframe a variation borrows from, or null when this is an aircraft in
+ * its own right.
+ *
+ * `[VARIATION] base_container = "..\FNX_319_CFM"` is the sim's own mechanism
+ * for "use another aircraft's model, panel and flight model": a livery
+ * declared the old way, inside a full `aircraft.cfg`. Its manifest can still
+ * say `content_type: AIRCRAFT` (RE Liveries' Avianca A319 does), so this is
+ * the field to trust.
+ */
+function baseContainerOf(cfg) {
+  const value = cfg && get(cfg, 'VARIATION', 'base_container');
+  if (!value) return null;
+  const parts = String(value)
+    .split(/[\\/]+/)
+    .map((part) => part.trim())
+    .filter((part) => part && part !== '.' && part !== '..');
+  return parts.length ? parts[parts.length - 1] : null;
+}
+
 /** Scan one `SimObjects/Airplanes/<Model>` folder. */
 async function readAirframe(modelDir, modelName, resolve = identity) {
   const commonCfg = await readCfgFile(path.join(modelDir, 'common', 'config', 'aircraft.cfg'));
@@ -419,11 +439,17 @@ async function readAirframe(modelDir, modelName, resolve = identity) {
   // Every declared variation was AI-only, so nothing here is flyable.
   const aiOnly = fltsim.blockCount > 0 && fltsim.userSelectable === 0 && presetVariants.length === 0;
 
+  // A full FS2024 layout is an aircraft whatever its root cfg says; only a
+  // bare root cfg pointing elsewhere is a variation.
+  const baseContainer = commonCfg || presetVariants.length ? null : baseContainerOf(rootCfg);
+
   return {
     key: modelName.toLowerCase(),
     modelName,
     dir: modelDir,
-    hasBase: Boolean(commonCfg || rootCfg || presetVariants.length),
+    hasBase: Boolean(commonCfg || (rootCfg && !baseContainer) || presetVariants.length),
+    /** Airframe folder this one borrows from, when it is only a variation. */
+    baseContainer,
     aiOnly,
     facts,
     typeRole: roleVariant ? roleVariant.typeRole : undefined,
@@ -433,8 +459,11 @@ async function readAirframe(modelDir, modelName, resolve = identity) {
      * One entry per distinct aircraft declared in this folder. Usually one,
      * but Fenix ships A319/A320/A321 together and PMDG ships the 737-800
      * alongside its BCF, BDSF and BBJ2 conversions.
+     *
+     * None for a variation: its FLTSIM blocks are paint for someone else's
+     * aircraft, so they must not declare an aircraft of their own.
      */
-    groups,
+    groups: baseContainer ? [] : groups,
   };
 }
 

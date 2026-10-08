@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   openPath: (target) => ipcRenderer.invoke('shell:openPath', target),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 
+  listInstalls: () => ipcRenderer.invoke('installs:list'),
   addRoot: () => ipcRenderer.invoke('roots:add'),
   rootCandidates: () => ipcRenderer.invoke('roots:candidates'),
   removeRoot: (dir) => ipcRenderer.invoke('roots:remove', dir),

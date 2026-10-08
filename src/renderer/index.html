@@ -63,6 +63,11 @@
             <span class="art-progress-track"><span class="art-progress-bar" id="art-progress-bar"></span></span>
           </div>
         </div>
+        <div class="notice" id="photo-notice" role="status" hidden>
+          <p class="notice-text" id="photo-notice-text"></p>
+          <button type="button" class="button" id="photo-notice-off">Turn off photos</button>
+          <button type="button" class="notice-close" id="photo-notice-close" aria-label="Dismiss">×</button>
+        </div>
         <div class="grid" id="grid" data-size="medium"></div>
         <div class="empty" id="empty" hidden></div>
       </main>
@@ -82,11 +87,31 @@
 
     <div class="toast" id="toast" hidden></div>
 
+    <!-- Shown once, before the first scan. Built in app.js because it lists
+         whatever installs were detected. -->
+    <section class="welcome" id="welcome" hidden aria-labelledby="welcome-title">
+      <div class="welcome-panel" id="welcome-panel"></div>
+    </section>
+
     <div class="splash" id="splash">
-      <div class="splash-inner">
-        <span class="spinner" aria-hidden="true"></span>
-        <p id="splash-text">Scanning your MSFS packages…</p>
-        <p class="splash-sub" id="splash-sub"></p>
+      <div class="splash-inner" role="status" aria-live="polite">
+        <p class="splash-install" id="splash-install"></p>
+        <ol class="stages">
+          <li class="stage" data-stage="detect" data-state="active">
+            <span class="stage-mark" aria-hidden="true"></span>
+            <span class="stage-label">Finding your sim</span>
+          </li>
+          <li class="stage" data-stage="read">
+            <span class="stage-mark" aria-hidden="true"></span>
+            <span class="stage-label">Reading your aircraft</span>
+            <span class="stage-count" id="stage-count"></span>
+          </li>
+          <li class="stage" data-stage="match">
+            <span class="stage-mark" aria-hidden="true"></span>
+            <span class="stage-label">Matching liveries to aircraft</span>
+          </li>
+        </ol>
+        <span class="stage-track" aria-hidden="true"><span class="stage-bar" id="stage-bar"></span></span>
       </div>
     </div>
 
