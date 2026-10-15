@@ -1,8 +1,10 @@
-# Runs the scanner regression tests on every push and pull request.
+# Runs the tests and builds the UI on every push and pull request.
 #
-# The tests scan the fake add-ons in test/fixtures, never a real sim install,
-# so they need nothing but Node. Windows, because that is the only platform
-# the app ships for and path handling is where it would differ.
+# The tests scan the fake add-ons in test/fixtures and exercise the UI's
+# filtering rules, never a real sim install, so they need nothing but Node.
+# The build step catches a broken UI before it reaches a release. Windows,
+# because that is the only platform the app ships for and path handling is
+# where it would differ.
 
 name: tests
 
@@ -21,6 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # The scanner has no runtime dependencies, so there is nothing to
-      # install: skipping `npm ci` also skips downloading Electron.
+          cache: npm
+      # Building the UI needs React, ARC UI and Vite, but not the Electron
+      # binary itself, which is over 100 MB.
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
       - run: npm test
+      - run: npm run build:ui

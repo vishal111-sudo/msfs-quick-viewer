@@ -1,0 +1,95 @@
+/* ============================================================================
+   MSFS Quick Viewer theme, on top of ARC UI's tokens.
+
+   The look of flightsimulator.com, so the app feels at home next to the sim:
+   pure black, white type, one sky blue (#00B4FF, sampled from the site),
+   Bebas Neue for display headings and Open Sans for everything else. Both
+   faces are OFL and bundled, since the app runs offline.
+
+   The look only. No Microsoft or Flight Simulator logos, wordmarks or
+   artwork, and the app says it is unofficial (Settings and the README).
+
+   Every ARC component reads these tokens, so nothing is styled by hand to
+   match: override here and the whole app follows. Compound tokens (glows,
+   focus rings, gradients) recompose from the accent pair and its -rgb
+   channels. `html:root` and `html[data-theme]` outrank ARC's own selectors.
+
+   Contrast was measured, not eyeballed: every text token clears 4.5:1 on
+   every surface it sits on, including the accent-tinted selected row.
+   ========================================================================= */
+
+html:root {
+  --bg-deep: rgb(0, 0, 0);
+  --bg-surface: rgb(6, 8, 11);
+  --bg-base: rgb(6, 8, 11);
+  --bg-card: rgb(13, 17, 23);
+  --bg-elevated: rgb(20, 26, 34);
+  --bg-hover: rgba(0, 180, 255, 0.06);
+
+  --text-primary: rgb(245, 247, 250);
+  --text-primary-rgb: 245, 247, 250;
+  --text-secondary: rgb(176, 184, 194);
+  --text-muted: rgb(150, 158, 170);
+  --text-muted-rgb: 150, 158, 170;
+  --text-ghost: rgb(132, 140, 152);
+
+  --border-subtle: rgb(24, 30, 38);
+  --border-default: rgb(36, 44, 54);
+  --border-default-rgb: 36, 44, 54;
+  /* The site's own grey. */
+  --border-bright: rgb(66, 70, 79);
+
+  --accent-primary: rgb(0, 180, 255);
+  --accent-primary-rgb: 0, 180, 255;
+  /* A deeper step of the same blue, so gradients and glows stay one hue. */
+  --accent-secondary: rgb(40, 160, 230);
+  --accent-secondary-rgb: 40, 160, 230;
+
+  --font-body-family: 'Open Sans';
+  --font-label-family: 'Open Sans';
+  --font-display-family: 'Bebas Neue';
+  --font-mono-family: 'JetBrains Mono';
+
+  --radius-md: 4px;
+  --radius-lg: 6px;
+
+  /* App-level tokens, not ARC's. */
+  --app-sidebar-width: 214px;
+  --app-detail-width: 520px;
+  /* Chrome that sits on photography stays dark in both themes: its backdrop
+     is the image, not the page. */
+  --app-on-photo-bg: rgba(0, 0, 0, 0.62);
+  --app-on-photo-text: rgb(245, 247, 250);
+}
+
+/* Light: the site's light sections. White text on #00B4FF measures 2.34:1 and
+   the blue on white the same, so the accent darkens to rgb(0, 104, 168):
+   5.92:1 on white, 5.12:1 on the tinted selected row, and white button text
+   on it reads at 5.92:1. The secondary text grey is the site's #42464F. */
+html[data-theme='light'] {
+  --bg-deep: rgb(238, 240, 243);
+  --bg-surface: rgb(246, 247, 249);
+  --bg-base: rgb(246, 247, 249);
+  --bg-card: rgb(255, 255, 255);
+  --bg-elevated: rgb(255, 255, 255);
+  --bg-hover: rgba(0, 104, 168, 0.06);
+
+  --text-primary: rgb(17, 20, 24);
+  --text-primary-rgb: 17, 20, 24;
+  --text-secondary: rgb(66, 70, 79);
+  --text-muted: rgb(84, 90, 100);
+  --text-muted-rgb: 84, 90, 100;
+  --text-ghost: rgb(98, 104, 114);
+
+  --border-subtle: rgb(228, 231, 235);
+  --border-default: rgb(212, 216, 222);
+  --border-default-rgb: 212, 216, 222;
+  --border-bright: rgb(188, 194, 202);
+
+  --accent-primary: rgb(0, 104, 168);
+  --accent-primary-rgb: 0, 104, 168;
+  --accent-secondary: rgb(0, 128, 196);
+  --accent-secondary-rgb: 0, 128, 196;
+
+  color-scheme: light;
+}

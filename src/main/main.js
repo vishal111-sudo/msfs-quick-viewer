@@ -265,7 +265,8 @@ async function createWindow() {
     height: 920,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#12151b',
+    // The theme's ground, so a resize never flashes another colour.
+    backgroundColor: '#000000',
     show: false,
     title: 'MSFS Quick Viewer',
     webPreferences: {
@@ -283,6 +284,7 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  // Built from ui/ by Vite (`npm run build:ui`); see vite.config.mjs.
   await mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 }
 

@@ -105,11 +105,21 @@ Where a match is wrong, the detail panel offers **Find a different photo**,
 **Paste image** (Ctrl+V) and **Set thumbnail...**. A thumbnail you set yourself
 is never overwritten.
 
-## Themes
+## Look
 
-Dark, light, or match Windows, chosen in Settings.
+The interface takes its look from flightsimulator.com so it feels at home next
+to the sim: black, white type, one sky blue, Bebas Neue for headings and Open
+Sans for everything else. Dark, light, or match Windows, chosen in Settings.
+Light mode uses a darker blue, because the site's blue measures 2.3:1 on white.
 
 ![Light theme](docs/screenshot-light.png)
+
+The look only: no Microsoft or Flight Simulator logos, wordmarks or artwork
+are used.
+
+**MSFS Quick Viewer is an unofficial, independent tool. It is not affiliated
+with, endorsed by, or connected to Microsoft or Asobo Studio. Microsoft Flight
+Simulator is a trademark of Microsoft Corporation.**
 
 ## Accuracy
 
@@ -149,9 +159,17 @@ source and developer cut across the same set.
 
 ```bash
 npm install
-npm start          # run from source
+npm start          # build the UI, then run from source
+npm test           # scanner and UI-logic tests, no sim needed
 npm run dist       # build the portable exe into the project root
 ```
+
+The UI is React on [ARC UI](https://arcui.dev)'s components, built by Vite from
+`ui/` into `src/renderer/`, which is generated and not committed. React, ARC
+and the fonts are bundled into the build, so the shipped app has no loose
+`node_modules`. The theme is a set of overrides of ARC's design tokens in
+`ui/theme.css`; every component reads them, so that one file decides how the
+app looks.
 
 Shipping a version:
 
@@ -164,15 +182,21 @@ gh release create v$(node -p "require('./package.json').version") MSFS-Quick-Vie
 The executable is not committed. A 96 MB binary per build would live in git
 history forever, so it belongs on the release page.
 
-Developer probes run against your real install and print what the scanner sees:
+Developer probes run against your real install. The ones that open the app
+use a temporary copy of your profile, so they never change your settings.
+Build the UI first (`npm run build:ui`) for the `electron` ones.
 
 ```bash
-node scripts/probe-scan.js            # full scan: counts, categories, developers
-node scripts/probe.js <packageName>   # detail for one package
-npx electron scripts/smoke.js         # boot, screenshot, report console errors
-npx electron scripts/probe-first-run.js    # a new user's first launch, screenshotted on a timeline
-npx electron scripts/inspect.js       # contrast and geometry check
+node scripts/probe-scan.js                # full scan: counts, categories, developers
+node scripts/probe.js <packageName>       # detail for one package
+npx electron scripts/smoke.js             # boot, screenshot, report console errors
+npx electron scripts/probe-first-run.js   # a new user's first launch, on a timeline
+npx electron scripts/inspect.js           # contrast in both themes, fails below WCAG AA
+npx electron scripts/screenshots.js       # regenerate the README screenshots
 ```
+
+Every screenshot these write is redacted first: drive letters become `C:` and
+any Windows username becomes `Pilot`.
 
 ## Layout
 
@@ -187,10 +211,22 @@ src/main/
   store.js              atomic JSON settings
   parsers/              cfg, locpak, package, streamed, taxonomy
   data/aircraft-catalog.js
-src/renderer/           index.html, styles.css, app.js
+ui/
+  components/           App, TopBar, Sidebar, AircraftCard, DetailDrawer,
+                        SettingsDrawer, Welcome, ScanSplash, ...
+  lib/filters.mjs       filtering, facet counts, sorting (tested)
+  lib/format.mjs        labels and estimates (tested)
+  lib/art.js            photo store and background sweep
+  theme.css             the look, as ARC token overrides
+  app.css               layout
+src/renderer/           built from ui/ (generated)
+test/                   scanner fixtures and UI-logic tests
 ```
 
 The renderer runs with `contextIsolation` on, `nodeIntegration` off, and a CSP
-that allows no remote content. Images are served through a custom `msfsart://`
-scheme that only reads from the scanned package roots and the app's own cache
-directory. Fetched images are stored locally, never hotlinked.
+that allows no remote content and no script but the app's own. One relaxation:
+`style-src-attr 'unsafe-inline'`, because ARC's components set inline `style`
+attributes (a progress bar's width, for one) and render broken without it.
+Inline `<style>` blocks stay blocked. Images are served through a custom
+`msfsart://` scheme that only reads from the scanned package roots and the
+app's own cache directory. Fetched images are stored locally, never hotlinked.

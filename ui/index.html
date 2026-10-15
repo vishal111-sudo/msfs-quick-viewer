@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Nothing remote and no script but the app's own. style-src-attr allows
+         inline style *attributes* only, because 52 ARC components set them
+         (a progress bar's width, for one) and render broken without. Inline
+         <style> blocks remain blocked. Fonts are bundled, never data: URLs. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src msfsart: data:; font-src 'self';"
+    />
+    <title>MSFS Quick Viewer</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.jsx"></script>
+  </body>
+</html>

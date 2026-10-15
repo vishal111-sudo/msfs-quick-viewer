@@ -1,82 +1,116 @@
 'use strict';
 
-// Developer probe: boots the app and dumps computed geometry for the first
-// card, to debug layout problems that only show up in the real window.
+// Developer probe: measures the theme's contrast in the real window, in both
+// themes, and exits non-zero if anything falls short of WCAG AA.
+//
+//   npx electron scripts/inspect.js
+//
+// Contrast is measured from the computed tokens rather than from theme.css,
+// so it checks what ARC actually resolves, overrides and all. Each text
+// token is tested against every surface it can sit on and the worst case is
+// reported. The accent is also tested over the accent-tinted selected row,
+// which is where both previous contrast failures in this app were found.
 
+const os = require('node:os');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const { app, BrowserWindow } = require('electron');
 
 app.setName('MSFS Quick Viewer');
+// A throwaway profile: the measurement needs the page, not a scan.
+app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'msfsqv-inspect-')));
 
 const MEASURE = `(() => {
   document.documentElement.dataset.theme = '__THEME__';
-
-  const lum = (hex) => {
-    const n = hex.replace('#', '');
-    const v = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255)
-      .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
-    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  const css = getComputedStyle(document.documentElement);
+  const tok = (name) => css.getPropertyValue(name).trim();
+  // Vite's CSS minifier rewrites rgb() as hex, so read both.
+  const unreadable = [];
+  const channels = (value, name) => {
+    let parts = [];
+    if (/^#[0-9a-f]{3,8}$/i.test(value)) {
+      let hex = value.slice(1);
+      if (hex.length <= 4) hex = [...hex].map((c) => c + c).join('');
+      parts = hex.match(/../g).map((h) => parseInt(h, 16));
+      if (parts.length === 4) parts[3] /= 255;
+    } else {
+      parts = (value.match(/[\\d.]+/g) || []).map(Number);
+    }
+    if (parts.length < 3 || parts.some(Number.isNaN)) unreadable.push((name || '?') + '=' + JSON.stringify(value));
+    return parts;
+  };
+  const lum = ([r, g, b]) => {
+    const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
   };
   const ratio = (a, b) => {
     const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
     return Number(((x + 0.05) / (y + 0.05)).toFixed(2));
   };
-  const css = getComputedStyle(document.documentElement);
-  const tok = (n) => css.getPropertyValue(n).trim();
-  const bg = tok('--bg');
+  const over = (fg, alpha, bg) => fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha)));
 
+  const grounds = ['--bg-deep', '--bg-surface', '--bg-card', '--bg-elevated'];
+  const texts = ['--text-primary', '--text-secondary', '--text-muted', '--text-ghost', '--accent-primary'];
+  const worst = {};
   const fails = [];
-  const on = {};
-  for (const name of ['--text', '--text-dim', '--text-faint', '--accent']) {
-    const r = ratio(tok(name), bg);
-    on[name] = r;
-    if (r < 4.5) fails.push(name + ' ' + r + ':1');
+  for (const text of texts) {
+    let min = Infinity;
+    let against = '';
+    for (const ground of grounds) {
+      const r = ratio(channels(tok(text), text), channels(tok(ground), ground));
+      if (r < min) { min = r; against = ground; }
+    }
+    worst[text] = min + ' on ' + against;
+    if (min < 4.5) fails.push(text + ' ' + min + ':1 on ' + against);
   }
-  // Hairlines are non-text: 3:1 is the bar for a meaningful boundary.
-  const lineRatio = ratio(tok('--line'), bg);
 
-  // A selected facet paints accent text over an accent-tinted ground, so the
-  // real contrast is against that composite, not the page.
-  const rgba = tok('--accent-quiet').match(/[\\d.]+/g).map(Number);
-  const base = bg.replace('#', '').match(/../g).map((h) => parseInt(h, 16));
-  const mixed = base
-    .map((c, i) => Math.round(c * (1 - rgba[3]) + rgba[i] * rgba[3]))
-    .map((c) => c.toString(16).padStart(2, '0'))
-    .join('');
-  const selected = ratio(tok('--accent'), '#' + mixed);
+  // A selected facet: accent text over the accent tinted at 6% on the sidebar.
+  const accent = channels(tok('--accent-primary'), '--accent-primary');
+  const subtleAlpha = channels(tok('--accent-primary-subtle'), '--accent-primary-subtle')[3];
+  const selectedRow = over(accent, subtleAlpha, channels(tok('--bg-surface'), '--bg-surface'));
+  const selected = ratio(accent, selectedRow);
   if (selected < 4.5) fails.push('accent on selected row ' + selected + ':1');
 
+  // A primary button: ARC fills it with --interactive and sets --on-accent text.
+  const button = ratio(channels(tok('--on-accent'), '--on-accent'), channels(tok('--interactive'), '--interactive'));
+  if (button < 4.5) fails.push('primary button text ' + button + ':1');
+
+  if (unreadable.length) fails.push('could not read ' + [...new Set(unreadable)].join(', '));
+  if (!(subtleAlpha > 0)) fails.push('could not read the selected-row tint');
+
   return {
-    ground: bg,
-    accent: tok('--accent'),
-    textContrast: on,
-    lineContrast: lineRatio,
+    worstCase: worst,
     accentOnSelectedRow: selected,
+    primaryButtonText: button,
     failsAA: fails,
   };
 })()`;
 
 require(path.join(__dirname, '..', 'src', 'main', 'main.js'));
 
-
 app.whenReady().then(async () => {
-  await new Promise((resolve) => setTimeout(resolve, 900));
-  const win = BrowserWindow.getAllWindows()[0];
-
-  for (let i = 0; i < 40; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 700));
-    const ready = await win.webContents.executeJavaScript(`document.getElementById('splash').hidden`).catch(() => false);
-    if (ready) break;
+  let win = null;
+  while (!win) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    win = BrowserWindow.getAllWindows()[0];
+  }
+  // A fresh profile lands on the welcome screen, which is enough: the tokens
+  // are on the document either way.
+  for (let i = 0; i < 60; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (await win.webContents.executeJavaScript(`!!document.querySelector('#welcome, .app')`).catch(() => false)) break;
   }
 
-  // Contrast is checked per theme, because a palette that passes on the dark
-  // ground can fail on the light one.
+  let failed = 0;
   for (const theme of ['dark', 'light']) {
-    const report = await win.webContents
-      .executeJavaScript(MEASURE.replace('__THEME__', theme))
-      .catch((err) => ({ error: err.message }));
+    const report = await win.webContents.executeJavaScript(MEASURE.replace('__THEME__', theme));
+    failed += report.failsAA.length;
     console.log(theme, JSON.stringify(report, null, 2));
   }
-  app.exit(0);
+  console.log(failed ? `CONTRAST: ${failed} below AA` : 'CONTRAST: every pairing passes AA');
+  app.exit(failed ? 1 : 0);
+}).catch((err) => {
+  console.error('INSPECT FAILED:', err);
+  app.exit(1);
 });

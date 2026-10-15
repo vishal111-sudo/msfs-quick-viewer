@@ -1,0 +1,995 @@
+/* ============================================================================
+   Layout and the app's own pieces. Every colour, font and radius here is an
+   ARC token, so theme.css is the only file that decides how the app looks.
+
+   RULES
+   - The accent marks interactive state only: selection, focus, links, the
+     one primary action. Status and metadata use the neutral text tokens.
+   - Chrome that sits on photography (card badges) stays dark in both themes,
+     because its backdrop is the image.
+   - Monospace for identifiers you compare or copy: ICAO codes, versions,
+     package names, paths, counts.
+   - Motion is state feedback only, and ARC already collapses it under
+     prefers-reduced-motion.
+   ========================================================================= */
+
+/* ARC resets box-sizing inside its own shadow roots only. Without this, every
+   padded box on the page grew by its padding: a card body with a 98px
+   minimum and 20px of padding came out 118px tall. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-action {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.text-action:hover {
+  text-decoration: underline;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+/* A chevron, not a logo: the app keeps its own mark. */
+.brand-mark {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent-primary);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: translateY(3px) rotate(45deg);
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.topbar-search {
+  flex: 1;
+  max-width: 560px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sort {
+  width: 160px;
+}
+
+/* ---------- layout ---------- */
+
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar {
+  flex: 0 0 var(--app-sidebar-width);
+  overflow-y: auto;
+  padding: 0 8px 24px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.facets-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -8px 10px;
+  padding: 12px 16px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.facets-title {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.facets-clear {
+  padding: 1px 4px;
+  margin-right: -4px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--accent-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.facets-clear:hover {
+  border-color: var(--border-default);
+}
+
+.facets-clear:disabled {
+  color: var(--text-ghost);
+  cursor: default;
+}
+
+.facets-clear:disabled:hover {
+  border-color: transparent;
+}
+
+.facet {
+  margin-bottom: 16px;
+}
+
+.facet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+}
+
+/* Section labels the way the site sets them: Open Sans bold, uppercase. */
+.facet h3 {
+  margin: 0;
+  color: var(--text-ghost);
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.facet-head .facets-clear {
+  font-size: 11px;
+}
+
+.facet-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.facet-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.facet-option[aria-pressed='true'] {
+  background: var(--accent-primary-subtle);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.facet-option .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.facet-option .count {
+  margin-left: auto;
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.facet-option[aria-pressed='true'] .count {
+  color: inherit;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0 18px 28px;
+}
+
+.content-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0 -18px 12px;
+  padding: 12px 18px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.result-count {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-count strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.result-count .sep {
+  margin: 0 8px;
+}
+
+.art-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+  margin-left: auto;
+}
+
+.art-progress-text {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.art-progress-bar {
+  flex: 1;
+}
+
+/* ---------- photo notice ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 10px 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--radius-md);
+}
+
+.notice-text {
+  flex: 1;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.notice-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-ghost);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.notice-close:hover {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+/* ---------- grid and cards ---------- */
+
+.grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
+  --card-min: 220px;
+}
+
+.grid[data-size='small'] {
+  --card-min: 170px;
+}
+
+.grid[data-size='large'] {
+  --card-min: 300px;
+}
+
+.card {
+  display: block;
+  outline: none;
+}
+
+.card:focus-visible::part(card) {
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.card-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9.5;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.card-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--text-ghost);
+  font-size: 12px;
+}
+
+.placeholder .glyph {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--text-ghost);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(45deg);
+}
+
+.card-badges {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.badge {
+  padding: 1px 6px;
+  background: var(--app-on-photo-bg);
+  border-radius: var(--radius-sm);
+  color: var(--app-on-photo-text);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  backdrop-filter: blur(4px);
+}
+
+.badge.quiet {
+  color: rgba(245, 247, 250, 0.75);
+}
+
+/* The height a two-line title needs is reserved on the body, not the title:
+   reserving it on the title left a gap between a one-line name and its
+   developer. Here the slack goes above the meta line, which is pinned to the
+   bottom, so a row of cards keeps one bottom edge either way. */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Two title lines (36.45) + developer (18.75) + meta (21.25) + gaps (4)
+     + padding (20) = 100.45px. */
+  min-height: 101px;
+  padding: 9px 11px 11px;
+}
+
+.card-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-dev {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-dev-more {
+  color: var(--text-ghost);
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: auto;
+  padding-top: 4px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.card-meta > span {
+  flex: none;
+}
+
+.card-meta > span + span:not(.card-version)::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+/* Right-aligned: it answers "which build do I have", a different question
+   from the rest of the line. It is the part that gives way when narrow. */
+.card-meta > .card-version {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- empty states ---------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  max-width: 600px;
+  margin: 64px auto;
+}
+
+.empty-detail {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.empty-detail summary {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.empty-paths {
+  margin: 10px 0 6px;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.8;
+  word-break: break-all;
+}
+
+.empty-note {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------- drawers ---------- */
+
+.detail-drawer::part(panel),
+.settings-drawer::part(panel) {
+  width: var(--app-detail-width);
+  max-width: 92vw;
+}
+
+/* ARC pads the drawer header but not its body; match the header so content
+   lines up with the title. */
+.detail-drawer::part(body),
+.settings-drawer::part(body) {
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+
+/* The drawer title in the display face, like the site's headings. */
+.detail-drawer::part(title),
+.settings-drawer::part(title) {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: none;
+}
+
+.detail {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+.detail-hero {
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+}
+
+.detail-hero img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.art-credit {
+  margin: -8px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.detail-sub {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.section h3 {
+  margin: 0;
+  color: var(--text-ghost);
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* A compact details table. ARC's description list sets each row at about
+   60px with large values, which made nine facts fill the screen. */
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 18px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.kv dt {
+  color: var(--text-muted);
+}
+
+.kv dd {
+  margin: 0;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.package {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.package-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.package-head strong {
+  font-size: 12.5px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.package-path {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.package .text-action {
+  justify-self: start;
+  font-size: 12.5px;
+}
+
+.livery-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+.livery {
+  margin: 0;
+}
+
+.livery-art {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+}
+
+.livery-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.livery-name {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- settings ---------- */
+
+.setting {
+  display: grid;
+  gap: 6px;
+}
+
+.setting strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.setting-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.root-row {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.root-row code {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.root-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- splash ---------- */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  background: var(--bg-deep);
+}
+
+.splash-inner {
+  display: grid;
+  gap: 16px;
+  width: 320px;
+}
+
+.splash-brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.splash-install {
+  min-height: 1.5em;
+  margin: -8px 0 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.stages {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-ghost);
+  font-size: 13px;
+  transition: color 0.12s ease;
+}
+
+.stage[data-state='active'] {
+  color: var(--text-primary);
+}
+
+.stage[data-state='done'] {
+  color: var(--text-secondary);
+}
+
+.stage-mark {
+  justify-self: center;
+  width: 6px;
+  height: 6px;
+  background: var(--border-bright);
+  border-radius: 50%;
+}
+
+.stage[data-state='active'] .stage-mark {
+  width: 12px;
+  height: 12px;
+  background: none;
+  border: 2px solid var(--border-bright);
+  border-top-color: var(--accent-primary);
+  animation: stage-spin 0.7s linear infinite;
+}
+
+.stage[data-state='done'] .stage-mark {
+  width: 9px;
+  height: 5px;
+  background: none;
+  border-radius: 0;
+  border-left: 2px solid var(--accent-primary);
+  border-bottom: 2px solid var(--accent-primary);
+  transform: translateY(-2px) rotate(-45deg);
+}
+
+@keyframes stage-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.stage-count {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+/* ---------- welcome ---------- */
+
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 32px 16px;
+  background: var(--bg-deep);
+}
+
+.welcome-panel {
+  display: grid;
+  gap: 26px;
+  width: min(540px, 100%);
+}
+
+.welcome-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.welcome-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.03em;
+}
+
+.welcome-lede {
+  margin: -12px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.welcome-section {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.welcome-label {
+  margin: 0;
+  color: var(--text-ghost);
+  font-family: var(--font-label);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.welcome-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.install-list {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.install-name {
+  font-weight: 600;
+}
+
+.install-path {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+
+.choice-list {
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.choice {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.choice + .choice {
+  border-top: 1px solid var(--border-default);
+}
+
+.choice:hover {
+  background: var(--bg-hover);
+}
+
+.choice:has(input:checked) {
+  background: var(--accent-primary-subtle);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.choice input {
+  margin: 4px 0 0;
+  accent-color: var(--accent-primary);
+}
+
+.choice-text {
+  display: grid;
+  gap: 2px;
+}
+
+.choice-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.welcome-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-default);
+}
+
+@media (max-width: 880px) {
+  .sidebar {
+    display: none;
+  }
+}
+
+.empty > arc-empty-state {
+  width: 100%;
+}

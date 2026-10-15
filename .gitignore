@@ -10,3 +10,6 @@ MSFS-Quick-Viewer-*-portable.exe
 # %APPDATA% paths that include the Windows username, and naming them one by
 # one means the next probe added leaks by default.
 smoke*.png
+
+# Built from ui/ by `npm run build:ui` (Vite). Never edit by hand.
+src/renderer/

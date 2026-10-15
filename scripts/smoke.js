@@ -9,7 +9,16 @@ const fsp = require('node:fs/promises');
 
 const { app, BrowserWindow } = require('electron');
 
+const { useProfileCopy } = require('./profile');
 const { redactForScreenshot } = require('./redact');
+
+// In-page function that closes an ARC drawer through its own close button, so
+// the run exercises the real close path rather than poking a property.
+const CLOSE_DRAWER = `((id) => {
+  const drawer = document.getElementById(id);
+  const close = drawer && drawer.shadowRoot && drawer.shadowRoot.querySelector('[part~="close"]');
+  if (close) close.click();
+})`;
 
 const OUT = process.argv[2] || path.join(__dirname, '..', 'smoke.png');
 const problems = [];
@@ -19,22 +28,9 @@ const problems = [];
 // the smoke run exercises the same settings and art cache as the real thing.
 app.setName('MSFS Quick Viewer');
 
-// ...but on a copy. The run clicks through the welcome screen, which saves
-// `welcomed`, and doing that to the real profile would mean the person
-// running the smoke test never gets to see the welcome screen themselves.
-{
-  const os = require('node:os');
-  const fs = require('node:fs');
-  const real = app.getPath('userData');
-  const copy = fs.mkdtempSync(path.join(os.tmpdir(), 'msfsqv-smoke-'));
-  if (fs.existsSync(real)) {
-    // Chromium's own caches are locked by any running copy of the app and
-    // are not needed; settings and the art cache are.
-    const skip = new Set(['Cache', 'Code Cache', 'GPUCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'Network']);
-    fs.cpSync(real, copy, { recursive: true, filter: (src) => !skip.has(path.basename(src)) });
-  }
-  app.setPath('userData', copy);
-}
+// ...but on a copy: the run clicks through the welcome screen, and must not
+// do that to the real profile. See profile.js.
+useProfileCopy(app);
 
 require(path.join(__dirname, '..', 'src', 'main', 'main.js'));
 
@@ -75,8 +71,10 @@ app.whenReady().then(async () => {
   for (let i = 0; i < 40; i += 1) {
     const welcome = await win.webContents
       .executeJavaScript(`(() => {
-        const button = document.querySelector('#welcome:not([hidden]) .button.primary');
-        if (!button) return document.getElementById('welcome').hidden ? 'none' : 'loading';
+        // The welcome and splash screens are only in the page while showing.
+        const button = document.querySelector('#welcome .welcome-start');
+        if (!button) return document.getElementById('welcome') ? 'loading' : 'none';
+        if (button.disabled) return 'loading';
         button.click();
         return 'clicked';
       })()`)
@@ -94,7 +92,7 @@ app.whenReady().then(async () => {
     summary = await win.webContents
       .executeJavaScript(
         `(() => ({
-           splash: document.getElementById('splash').hidden,
+           splash: !document.getElementById('splash') && !document.getElementById('welcome'),
            count: document.getElementById('result-count').textContent,
            cards: document.querySelectorAll('.card').length,
            withImg: document.querySelectorAll('.card-art img').length,
@@ -119,11 +117,12 @@ app.whenReady().then(async () => {
 
   // The background photo sweep should be reporting real progress by now.
   const progress = await win.webContents.executeJavaScript(`(() => {
+    // Present only while a sweep is running.
     const box = document.getElementById('art-progress');
     return {
-      visible: !box.hidden,
-      text: document.getElementById('art-progress-text').textContent,
-      width: document.getElementById('art-progress-bar').style.width,
+      visible: Boolean(box),
+      text: box ? document.getElementById('art-progress-text').textContent : null,
+      percent: box ? document.getElementById('art-progress-bar').value : null,
     };
   })()`);
   console.log('SMOKE art progress:', JSON.stringify(progress));
@@ -161,24 +160,23 @@ app.whenReady().then(async () => {
   const detailShot = await win.webContents.capturePage();
   const detailOut = OUT.replace(/.png$/, '-detail.png');
   await fsp.writeFile(detailOut, detailShot.toPNG());
-  const drawerOpen = await win.webContents.executeJavaScript(
-    "!document.getElementById('detail').hidden",
-  );
+  const drawerOpen = await win.webContents.executeJavaScript("document.getElementById('detail').open === true");
   console.log('SMOKE detail drawer:', opened, '| open:', drawerOpen, '->', detailOut);
   if (!drawerOpen) problems.push('detail drawer did not open');
 
   // Settings builds asynchronously now (it asks main for the photo sources),
   // so prove it actually renders.
-  await win.webContents.executeJavaScript(
-    "document.getElementById('detail-close').click(); document.getElementById('open-settings').click(); true",
-  );
+  await win.webContents.executeJavaScript(`${CLOSE_DRAWER}('detail'); true`);
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  await win.webContents.executeJavaScript("document.getElementById('open-settings').click(); true");
   await new Promise((resolve) => setTimeout(resolve, 1500));
   const settingsState = await win.webContents.executeJavaScript(`(() => {
     const drawer = document.getElementById('settings');
-    const select = drawer.querySelector('select');
+    // The first select is the theme; its options are the three themes.
+    const select = drawer.querySelector('arc-select');
     return {
-      open: !drawer.hidden,
-      sources: select ? [...select.options].map((o) => o.value) : [],
+      open: drawer.open === true,
+      sources: select ? [...select.querySelectorAll('arc-option')].map((o) => o.value) : [],
       chosen: select ? select.value : null,
       sections: drawer.querySelectorAll('.section').length,
     };
@@ -197,7 +195,7 @@ app.whenReady().then(async () => {
 
   // Light theme gets its own capture: a dark-only palette hides plenty.
   await win.webContents.executeJavaScript(
-    "document.getElementById('settings-close').click(); document.documentElement.dataset.theme = 'light'; true",
+    `${CLOSE_DRAWER}('settings'); document.documentElement.dataset.theme = 'light'; true`,
   );
   await win.webContents.executeJavaScript(
     'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))',

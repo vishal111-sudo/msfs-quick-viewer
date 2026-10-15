@@ -38,16 +38,20 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function snapshot(win, label) {
   const state = await win.webContents
     .executeJavaScript(
-      `(() => ({
-        welcome: !document.getElementById('welcome').hidden,
-        splash: !document.getElementById('splash').hidden,
-        stages: [...document.querySelectorAll('.stage')].map((s) => s.dataset.stage + ':' + (s.dataset.state || '-')).join(' '),
-        stageCount: document.getElementById('stage-count').textContent,
-        install: document.getElementById('splash-install').textContent ? '(set)' : '',
-        cards: document.querySelectorAll('.card').length,
-        notice: document.getElementById('photo-notice').hidden ? null : document.getElementById('photo-notice-text').textContent,
-        progress: document.getElementById('art-progress').hidden ? null : document.getElementById('art-progress-text').textContent,
-      }))()`,
+      // Screens and notices are only in the page while they are showing.
+      `(() => {
+        const text = (id) => (document.getElementById(id) || {}).textContent || null;
+        return {
+          welcome: Boolean(document.getElementById('welcome')),
+          splash: Boolean(document.getElementById('splash')),
+          stages: [...document.querySelectorAll('.stage')].map((s) => s.dataset.stage + ':' + (s.dataset.state || '-')).join(' '),
+          stageCount: text('stage-count'),
+          install: text('splash-install') ? '(set)' : '',
+          cards: document.querySelectorAll('.card').length,
+          notice: text('photo-notice-text'),
+          progress: text('art-progress-text'),
+        };
+      })()`,
     )
     .catch((err) => ({ error: err.message }));
   console.log(label.padEnd(14), JSON.stringify(state));
@@ -73,7 +77,7 @@ app
     // Wait for the welcome screen to have its content.
     for (let i = 0; i < 80; i += 1) {
       const ready = await win.webContents
-        .executeJavaScript(`!!document.querySelector('#welcome:not([hidden]) .button.primary')`)
+        .executeJavaScript(`!!document.querySelector('#welcome .welcome-start:not([disabled])')`)
         .catch(() => false);
       if (ready) break;
       await sleep(50);
@@ -82,7 +86,7 @@ app
     if (!welcome.welcome) throw new Error('welcome screen did not appear on a fresh profile');
 
     const clicked = Date.now();
-    await win.webContents.executeJavaScript(`document.querySelector('#welcome .button.primary').click(); true`);
+    await win.webContents.executeJavaScript(`document.querySelector('#welcome .welcome-start').click(); true`);
 
     for (const seconds of MOMENTS) {
       const wait = clicked + seconds * 1000 - Date.now();

@@ -41,8 +41,8 @@ app
 
     // Wait for whichever screen this case should land on to have content.
     const ready = RETURNING
-      ? `!document.getElementById('splash').hidden ? false : !!document.querySelector('#empty:not([hidden]) button')`
-      : `!!document.querySelector('#welcome:not([hidden]) .welcome-foot')`;
+      ? `!document.getElementById('splash') && document.querySelectorAll('#empty .empty-paths li').length > 0`
+      : `!!document.querySelector('#welcome .welcome-foot')`;
     for (let i = 0; i < 120; i += 1) {
       if (await win.webContents.executeJavaScript(ready).catch(() => false)) break;
       await sleep(100);
@@ -54,20 +54,21 @@ app
             const empty = document.getElementById('empty');
             const details = empty.querySelector('details');
             if (details) details.open = true;
+            const state = empty.querySelector('arc-empty-state');
             return {
-              visible: !empty.hidden,
-              heading: (empty.querySelector('.empty-title') || {}).textContent || null,
-              button: (empty.querySelector('button') || {}).textContent || null,
+              visible: Boolean(empty),
+              heading: state ? state.heading : null,
+              button: (empty.querySelector('arc-button') || {}).textContent || null,
               pathsListed: empty.querySelectorAll('.empty-paths li').length,
             };
           })()`
         : `(() => {
             const welcome = document.getElementById('welcome');
             return {
-              visible: !welcome.hidden,
+              visible: Boolean(welcome),
               heading: (welcome.querySelector('.welcome-label') || {}).textContent || null,
-              button: (welcome.querySelector('.welcome-section .button') || {}).textContent || null,
-              scanDisabled: welcome.querySelector('.button.primary').disabled,
+              button: (welcome.querySelector('.welcome-section arc-button') || {}).textContent || null,
+              scanDisabled: welcome.querySelector('.welcome-start').disabled,
             };
           })()`,
     );

@@ -8,12 +8,13 @@
   "author": "vishal111-sudo",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
+    "build:ui": "vite build",
+    "start": "vite build && electron .",
     "icon": "electron scripts/make-icon.js",
-    "smoke": "electron scripts/smoke.js",
+    "smoke": "vite build && electron scripts/smoke.js",
     "scan": "node scripts/probe-scan.js",
-    "dist": "electron-builder --win portable && node scripts/place-exe.js",
-    "test": "node --test"
+    "test": "node --test",
+    "dist": "vite build && electron-builder --win portable && node scripts/place-exe.js"
   },
   "build": {
     "appId": "com.msfsquickviewer.app",
@@ -46,8 +47,26 @@
     "compression": "maximum"
   },
   "devDependencies": {
+    "@arclux/arc-ui": "^4.9.1",
+    "@arclux/arc-ui-react": "^4.8.2",
+    "@fontsource/b612": "^5.3.0",
+    "@fontsource/b612-mono": "^5.3.0",
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/bebas-neue": "^5.3.0",
+    "@fontsource/host-grotesk": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/open-sans": "^5.3.0",
+    "@fontsource/overpass": "^5.3.0",
+    "@fontsource/overpass-mono": "^5.3.0",
+    "@fontsource/tomorrow": "^5.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.4.3",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "lit": "^3.3.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.4"
   },
   "repository": {
     "type": "git",

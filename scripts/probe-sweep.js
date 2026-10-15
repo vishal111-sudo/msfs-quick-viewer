@@ -9,18 +9,24 @@ const path = require('node:path');
 
 const { app, BrowserWindow } = require('electron');
 
+const { useProfileCopy } = require('./profile');
+
 app.setName('MSFS Quick Viewer');
+// The real profile's cache, on a copy; past the welcome screen so the sweep
+// actually starts.
+useProfileCopy(app, { welcomed: true });
 
 require(path.join(__dirname, '..', 'src', 'main', 'main.js'));
 
 const READ = `(() => {
+  // The progress readout is only in the page while a sweep is running.
   const box = document.getElementById('art-progress');
   return {
-    visible: !box.hidden,
-    text: document.getElementById('art-progress-text').textContent,
-    width: document.getElementById('art-progress-bar').style.width,
+    visible: Boolean(box),
+    text: box ? document.getElementById('art-progress-text').textContent : null,
+    percent: box ? document.getElementById('art-progress-bar').value : null,
     cardsWithArt: document.querySelectorAll('.card-art img').length,
-    stillLooking: [...document.querySelectorAll('.card-art .placeholder div')]
+    stillLooking: [...document.querySelectorAll('.card-art .placeholder span')]
       .filter((n) => n.textContent.startsWith('Looking')).length,
   };
 })()`;
@@ -32,7 +38,7 @@ app.whenReady().then(async () => {
   // Wait for the scan to finish.
   for (let i = 0; i < 60; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 700));
-    if (await win.webContents.executeJavaScript("document.getElementById('splash').hidden")) break;
+    if (await win.webContents.executeJavaScript("!document.getElementById('splash') && document.querySelectorAll('.card').length > 0")) break;
   }
 
   const startedAt = Date.now();
@@ -44,10 +50,10 @@ app.whenReady().then(async () => {
     const state = await win.webContents.executeJavaScript(READ).catch(() => null);
     if (!state) break;
 
-    if (state.text !== last) {
+    if (state.visible && state.text !== last) {
       last = state.text;
       stalledSince = Date.now();
-      process.stdout.write(`\r${state.text.padEnd(30)} ${state.width.padStart(5)}  cards with art: ${state.cardsWithArt}   `);
+      process.stdout.write(`\r${state.text.padEnd(30)} ${String(state.percent).padStart(3)}%  cards with art: ${state.cardsWithArt}   `);
     }
 
     if (!state.visible) {
