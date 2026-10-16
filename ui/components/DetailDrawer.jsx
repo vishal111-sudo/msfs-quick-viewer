@@ -9,6 +9,23 @@ import { toast } from '../lib/ui.js';
 
 const api = window.api;
 
+/**
+ * What one package contributes to this aircraft. Without it the packages and
+ * liveries were two unrelated lists: a livery pack showed up as a package,
+ * its paint showed up under a generic name, and nothing connected the two.
+ */
+function packageAdds(aircraft, pkg) {
+  const liveries = aircraft.liveries.filter((livery) => livery.packageFolder === pkg.folderName);
+  const ships = (aircraft.basePackageFolders || []).includes(pkg.folderName);
+  const paint = liveries.length
+    ? `${liveries.length} ${liveries.length === 1 ? 'livery' : 'liveries'}${
+        liveries.length <= 2 ? `: ${liveries.map((l) => (l.registration ? `${l.name} (${l.registration})` : l.name)).join(', ')}` : ''
+      }`
+    : '';
+  if (ships) return paint ? `The aircraft, and ${paint}` : 'The aircraft';
+  return paint ? `Adds ${paint}` : '';
+}
+
 function Row({ term, value }) {
   return (
     <>
@@ -148,6 +165,7 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
             <div className="package" key={pkg.folderName}>
               <div className="package-head">
                 <strong className="mono">{pkg.folderName}</strong>
+                <span className="package-adds">{packageAdds(aircraft, pkg)}</span>
                 <Tag size="sm">{pkg.sourceLabel || pkg.source}</Tag>
                 {pkg.version && (
                   <Tag size="sm" className="mono">
@@ -194,7 +212,7 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
             <h3>Liveries ({aircraft.liveries.length})</h3>
             <div className="livery-grid">
               {aircraft.liveries.map((livery) => (
-                <figure className="livery" key={livery.id}>
+                <figure className="livery" key={livery.id} title={livery.packageFolder ? `From ${livery.packageFolder}` : undefined}>
                   <div className="livery-art">
                     {livery.thumbnailUrl ? (
                       <img src={livery.thumbnailUrl} alt="" loading="lazy" />
@@ -203,6 +221,11 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
                     )}
                   </div>
                   <figcaption className="livery-name">{livery.name}</figcaption>
+                  {/* The tail number, when the livery's own name leaves it out: for
+                      airline paint it is often the only thing telling two apart. */}
+                  {livery.registration && !livery.name.toUpperCase().includes(livery.registration) && (
+                    <span className="livery-reg mono">{livery.registration}</span>
+                  )}
                 </figure>
               ))}
             </div>

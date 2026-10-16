@@ -4,6 +4,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 const { parseCfg, sectionsNamed, get } = require('./cfg');
+const { pickRegistration } = require('./registration');
 const { loadStrings, makeResolver } = require('./locpak');
 const { baseModelOf, designationOf, roleOf, icaoKeyOf, normalise, chooseGroup } = require('./variants');
 
@@ -96,6 +97,8 @@ function generalFacts(cfg, resolve = identity) {
 async function readFltsimEntries(cfg, modelDir, resolve = identity) {
   const blocks = sectionsNamed(cfg, /^FLTSIM\.\d+$/i);
   if (!blocks.length) return { variants: [], liveries: [], blockCount: 0, userSelectable: 0 };
+  // Some authors put the type designator in atc_id; recognise and drop it.
+  const icaoType = get(cfg, 'GENERAL', 'icao_type_designator');
 
   // Map the on-disk `texture.<suffix>` folders once, case-insensitively.
   const textureDirs = new Map();
@@ -141,7 +144,7 @@ async function readFltsimEntries(cfg, modelDir, resolve = identity) {
       // The block that declares the livery also declares which aircraft it is
       // for, so no tag guessing is needed for this layout.
       variantModel: uiType || undefined,
-      registration: keys.get('atc_id') || undefined,
+      registration: pickRegistration(keys.get('atc_id'), [uiVariation, title], icaoType),
       airline: keys.get('atc_airline') || undefined,
       thumbnail: textureDir ? await findThumbnail(textureDir) : null,
       dir: textureDir || undefined,
@@ -169,9 +172,13 @@ async function readLiveryFolders(modelDir, resolve = identity) {
       // offers; Fenix has four of them.
       if (String(required || '').trim().toLowerCase() === 'disabled') continue;
 
+      const name = (cfg && resolve(get(cfg, 'GENERAL', 'name'))) || livery.name;
       found.push({
-        name: (cfg && resolve(get(cfg, 'GENERAL', 'name'))) || livery.name,
+        name,
         title: livery.name,
+        // Rarely declared in this layout; the tail number usually lives only
+        // in the folder name ("Delta N324DU" for a livery named "Delta A220-300").
+        registration: pickRegistration(cfg && get(cfg, 'GENERAL', 'atc_id'), [livery.name, name]),
         creator: creator.name,
         // e.g. "A319,CFM,SL" — says which preset this paint belongs to.
         tags: required ? required.split(',').map((tag) => tag.trim()).filter(Boolean) : [],

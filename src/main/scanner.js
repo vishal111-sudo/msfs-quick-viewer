@@ -953,6 +953,8 @@ function finalise(aircraft) {
     packages: aircraft.packages,
     packageCount: aircraft.packages.length,
     ...versionOf(aircraft),
+    /** Packages that ship the airframe itself rather than paint for it. */
+    basePackageFolders: aircraft.basePackages.map((pkg) => pkg.folderName),
     liveries: aircraft.liveries,
     liveryCount: aircraft.liveries.length,
     liveriesWithArt,

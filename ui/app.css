@@ -993,3 +993,21 @@ body {
 .empty > arc-empty-state {
   width: 100%;
 }
+
+/* What a package contributes, on its own line under the package's name. */
+.package-adds {
+  flex-basis: 100%;
+  order: 10;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.package-adds:empty {
+  display: none;
+}
+
+.livery-reg {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
