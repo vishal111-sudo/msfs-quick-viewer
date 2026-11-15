@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { EmptyState } from '@arclux/arc-ui-react/EmptyState';
-import { Button } from '@arclux/arc-ui-react/Button';
+import { Button } from '@/components/ui/button';
 
 /**
  * Three different nothings, which need three different answers: the filters
@@ -8,9 +7,20 @@ import { Button } from '@arclux/arc-ui-react/Button';
  * found at all. The last is the first-run failure case, and it has to offer a
  * way forward rather than a shrug.
  */
-export function GridEmpty({ scan, onClearFilters, onChooseFolder }) {
+function EmptyState({ heading, description, children }) {
+  return (
+    <div className="empty-state">
+      <h2 className="empty-heading">{heading}</h2>
+      {description && <p className="empty-text">{description}</p>}
+      {children && <div className="empty-actions">{children}</div>}
+    </div>
+  );
+}
+
+export function GridEmpty({ scan, section, onClearFilters, onChooseFolder }) {
   const [candidates, setCandidates] = useState([]);
-  const total = scan ? scan.aircraft.length : 0;
+  const scenery = section === 'scenery';
+  const total = scan ? (scenery ? scan.scenery.packages.length : scan.aircraft.length) : 0;
   const installs = scan ? scan.installs : [];
   const noSim = scan && total === 0 && installs.length === 0;
 
@@ -22,11 +32,22 @@ export function GridEmpty({ scan, onClearFilters, onChooseFolder }) {
   if (total > 0) {
     return (
       <div className="empty" id="empty">
-        <EmptyState heading="No aircraft match these filters">
-          <Button slot="actions" variant="secondary" size="sm" onClick={onClearFilters}>
+        <EmptyState heading={`No ${scenery ? 'scenery' : 'aircraft'} matches these filters`}>
+          <Button variant="outline" size="sm" onClick={onClearFilters}>
             Clear filters
           </Button>
         </EmptyState>
+      </div>
+    );
+  }
+
+  if (scenery && installs.length) {
+    return (
+      <div className="empty" id="empty">
+        <EmptyState
+          heading="No add-on scenery found"
+          description="Scenery packages in Community will appear here. Stock scenery is not listed yet."
+        />
       </div>
     );
   }
@@ -48,7 +69,7 @@ export function GridEmpty({ scan, onClearFilters, onChooseFolder }) {
         heading="No Flight Simulator install found"
         description="Steam and Microsoft Store installs of MSFS 2024 and 2020 are checked automatically. Point the app at your Community folder and it will take it from there."
       >
-        <Button slot="actions" variant="primary" onClick={onChooseFolder}>
+        <Button onClick={onChooseFolder}>
           Choose your Community folder…
         </Button>
       </EmptyState>

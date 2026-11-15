@@ -115,6 +115,10 @@ async function decorateScan(result) {
     cachedArt += 1;
   }
 
+  for (const pkg of result.scenery.packages) {
+    pkg.thumbnailUrl = pkg.thumbnail ? encodeImagePath(pkg.thumbnail) : null;
+  }
+
   result.stats.artFromCache = cachedArt;
   return result;
 }

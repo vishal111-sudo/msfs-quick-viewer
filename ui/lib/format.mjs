@@ -50,3 +50,21 @@ export function versionLabel(aircraft) {
   }
   return aircraft.sealed ? 'Updates with the sim' : null;
 }
+
+/** The first few airport codes for a card; the panel lists them all. */
+export function airportCodes(pkg, limit = 3) {
+  const codes = pkg.airports.map((airport) => airport.ident).filter(Boolean);
+  if (codes.length <= limit) return codes.join(' ');
+  return `${codes.slice(0, limit).join(' ')} +${codes.length - limit}`;
+}
+
+export function formatCoordinates({ lat, lon }) {
+  const part = (value, positive, negative) => `${Math.abs(value).toFixed(3)}° ${value >= 0 ? positive : negative}`;
+  return `${part(lat, 'N', 'S')}, ${part(lon, 'E', 'W')}`;
+}
+
+/** Why a status reads as it does, when that is not obvious. */
+export function statusNote(status) {
+  if (status !== 'Not recorded') return null;
+  return "The sim's Content.xml has no entry for this package, so its state is unknown. Packages added since that file was last saved look like this. The sim loads what is in Community, so it is treated as active.";
+}

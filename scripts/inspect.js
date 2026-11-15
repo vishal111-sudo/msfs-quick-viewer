@@ -6,7 +6,7 @@
 //   npx electron scripts/inspect.js
 //
 // Contrast is measured from the computed tokens rather than from theme.css,
-// so it checks what ARC actually resolves, overrides and all. Each text
+// so it checks what the page actually resolves, overrides and all. Each text
 // token is tested against every surface it can sit on and the worst case is
 // reported. The accent is also tested over the accent-tinted selected row,
 // which is where both previous contrast failures in this app were found.
@@ -72,8 +72,8 @@ const MEASURE = `(() => {
   const selected = ratio(accent, selectedRow);
   if (selected < 4.5) fails.push('accent on selected row ' + selected + ':1');
 
-  // A primary button: ARC fills it with --interactive and sets --on-accent text.
-  const button = ratio(channels(tok('--on-accent'), '--on-accent'), channels(tok('--interactive'), '--interactive'));
+  // A primary button, and the chosen segment of a toggle: --on-accent text on the accent.
+  const button = ratio(channels(tok('--on-accent'), '--on-accent'), channels(tok('--accent-primary'), '--accent-primary'));
   if (button < 4.5) fails.push('primary button text ' + button + ':1');
 
   if (unreadable.length) fails.push('could not read ' + [...new Set(unreadable)].join(', '));

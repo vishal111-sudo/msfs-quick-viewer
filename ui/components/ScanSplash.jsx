@@ -1,11 +1,12 @@
 import React from 'react';
-import { Progress } from '@arclux/arc-ui-react/Progress';
+import { Progress } from '@/components/ui/progress';
 
 import { installLabel } from '../lib/format.mjs';
 
 const STAGES = [
   { key: 'detect', label: 'Finding your sim' },
   { key: 'read', label: 'Reading your aircraft' },
+  { key: 'scenery', label: 'Reading your scenery' },
   { key: 'match', label: 'Matching liveries to aircraft' },
 ];
 
@@ -19,8 +20,10 @@ export function ScanSplash({ progress }) {
   const useAddons = progress.addonsTotal > 0;
   const done = useAddons ? progress.addonsDone : progress.stockDone;
   const total = useAddons ? progress.addonsTotal : progress.stockTotal;
+  const reading = progress.stage === 'scenery';
   let percent = 0;
   if (progress.stage === 'match') percent = 100;
+  else if (reading) percent = progress.sceneryTotal ? Math.round((progress.sceneryDone / progress.sceneryTotal) * 100) : 0;
   else if (progress.stage === 'read' && total) percent = Math.round((done / total) * 100);
 
   return (
@@ -45,10 +48,15 @@ export function ScanSplash({ progress }) {
                   {progress.stage !== 'detect' && total ? `${done} / ${total} ${useAddons ? 'add-ons' : 'packages'}` : ''}
                 </span>
               )}
+              {stage.key === 'scenery' && (
+                <span className="stage-count mono">
+                  {reading && progress.sceneryTotal ? `${progress.sceneryDone} / ${progress.sceneryTotal}` : ''}
+                </span>
+              )}
             </li>
           ))}
         </ol>
-        <Progress className="stage-bar" size="sm" value={percent} />
+        <Progress className="stage-bar" value={percent} aria-label="Scan progress" />
       </div>
     </div>
   );

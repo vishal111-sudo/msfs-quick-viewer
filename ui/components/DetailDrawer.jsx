@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Drawer } from '@arclux/arc-ui-react/Drawer';
-import { Button } from '@arclux/arc-ui-react/Button';
-import { Tag } from '@arclux/arc-ui-react/Tag';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { SidePanel, useLast } from '@/components/ui/side-panel';
 
 import { artStore, requestArt, useArt } from '../lib/art.js';
 import { orDash, versionLabel } from '../lib/format.mjs';
@@ -36,7 +36,8 @@ function Row({ term, value }) {
 }
 
 /** The detail drawer. `onPasteTarget` hands App the paste action while open. */
-export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
+export function DetailDrawer({ aircraft: current, open, onClose, onPasteTarget }) {
+  const aircraft = useLast(current);
   const art = useArt(aircraft ? aircraft.id : '');
   const [searching, setSearching] = useState(false);
   const id = aircraft && aircraft.id;
@@ -64,7 +65,7 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
     return () => onPasteTarget(null);
   }, [open, id, paste, onPasteTarget]);
 
-  if (!aircraft) return <Drawer id="detail" className="detail-drawer" position="right" open={false} />;
+  if (!aircraft) return null;
 
   const heroSrc = aircraft.thumbnailUrl || (art && art.url);
   const chips = [
@@ -98,9 +99,13 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
   }
 
   return (
-    <Drawer id="detail" className="detail-drawer" position="right" open={open} heading={aircraft.name} onArcClose={onClose}>
+    <SidePanel id="detail" open={open} title={aircraft.name} onClose={onClose}>
       <div className="detail">
-        <div className="detail-hero">{heroSrc && <img src={heroSrc} alt="" />}</div>
+        {heroSrc && (
+          <div className="detail-hero">
+            <img src={heroSrc} alt="" />
+          </div>
+        )}
 
         {art && art.origin === 'online' && (
           // CC BY-SA requires the photographer to be named wherever the photo shows.
@@ -116,21 +121,21 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
         <p className="detail-sub">{[aircraft.developer, aircraft.sim].filter(Boolean).join(' · ')}</p>
         <div className="tags">
           {chips.map((value) => (
-            <Tag key={value} size="sm" className={value === aircraft.icaoType ? 'mono' : undefined}>
+            <Badge key={value} variant="outline" className={value === aircraft.icaoType ? 'mono' : undefined}>
               {value}
-            </Tag>
+            </Badge>
           ))}
         </div>
 
         <div className="detail-actions">
-          <Button variant="secondary" size="sm" onClick={setThumbnail}>
+          <Button variant="outline" size="sm" onClick={setThumbnail}>
             Set thumbnail…
           </Button>
-          <Button variant="secondary" size="sm" title="Copy any picture, then paste it here (Ctrl+V)" onClick={paste}>
+          <Button variant="outline" size="sm" title="Copy any picture, then paste it here (Ctrl+V)" onClick={paste}>
             Paste image
           </Button>
           {!aircraft.thumbnailUrl && (
-            <Button variant="ghost" size="sm" loading={searching} disabled={searching} onClick={findDifferent}>
+            <Button variant="ghost" size="sm" disabled={searching} onClick={findDifferent}>
               {searching ? 'Searching…' : 'Find a different photo'}
             </Button>
           )}
@@ -166,13 +171,13 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
               <div className="package-head">
                 <strong className="mono">{pkg.folderName}</strong>
                 <span className="package-adds">{packageAdds(aircraft, pkg)}</span>
-                <Tag size="sm">{pkg.sourceLabel || pkg.source}</Tag>
+                <Badge variant="outline">{pkg.sourceLabel || pkg.source}</Badge>
                 {pkg.version && (
-                  <Tag size="sm" className="mono">
+                  <Badge variant="outline" className="mono">
                     v{pkg.version}
-                  </Tag>
+                  </Badge>
                 )}
-                {pkg.enabled === 'disabled' && <Tag size="sm">disabled</Tag>}
+                {pkg.enabled === 'disabled' && <Badge variant="outline">disabled</Badge>}
               </div>
               {pkg.sealed ? (
                 <div className="package-path">Streamed package: its contents are encrypted by the sim</div>
@@ -199,9 +204,9 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
             <h3>Variants ({aircraft.variantNames.length})</h3>
             <div className="tags">
               {aircraft.variantNames.map((name) => (
-                <Tag key={name} size="sm">
+                <Badge key={name} variant="outline">
                   {name}
-                </Tag>
+                </Badge>
               ))}
             </div>
           </section>
@@ -232,6 +237,6 @@ export function DetailDrawer({ aircraft, open, onClose, onPasteTarget }) {
           </section>
         )}
       </div>
-    </Drawer>
+    </SidePanel>
   );
 }

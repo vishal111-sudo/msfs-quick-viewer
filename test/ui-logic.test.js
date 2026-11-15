@@ -139,3 +139,26 @@ test('version label names its package only when there is more than one', async (
   assert.equal(versionLabel({ sealed: true, packages: [{}] }), 'Updates with the sim');
   assert.equal(versionLabel({ sealed: false, packages: [{}] }), null);
 });
+
+test('the jump menu matches what was typed, not letters scattered through a name', async () => {
+  const { matchScore } = await load('filters.mjs');
+  // cmdk's fuzzy default ranked this aircraft above the airport for "wadd".
+  assert.equal(matchScore('aircraft waco', 'wadd', ['Waco CG-4A Hadrian', 'Asobo Studio']), 0);
+  assert.ok(matchScore('scenery bali', 'wadd', ['Bali Ngurah Rai', 'Aerosoft', 'WADD']) > 0);
+  assert.ok(matchScore('scenery bali', 'WADD', ['Bali Ngurah Rai', 'WADD']) > 0, 'case does not matter');
+});
+
+test('every word typed must match, in any order', async () => {
+  const { matchScore } = await load('filters.mjs');
+  const keywords = ['Airbus A320neo', 'Fenix Simulations', 'A20N'];
+  assert.ok(matchScore('aircraft a320', 'fenix a320', keywords) > 0);
+  assert.equal(matchScore('aircraft a320', 'fenix boeing', keywords), 0);
+  assert.ok(matchScore('aircraft a320', '  ', keywords) > 0, 'nothing typed hides nothing');
+});
+
+test('a word that starts a name ranks above one buried inside another', async () => {
+  const { matchScore } = await load('filters.mjs');
+  const starts = matchScore('aircraft x', 'bus', ['Bus Simulator']);
+  const buried = matchScore('aircraft y', 'bus', ['Airbus A320']);
+  assert.ok(starts > buried && buried > 0, `${starts} vs ${buried}`);
+});

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Button } from '@arclux/arc-ui-react/Button';
+import { XIcon } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 
 import { useSweep } from '../lib/art.js';
 import { sweepEstimate } from '../lib/format.mjs';
@@ -22,11 +24,11 @@ export function PhotoNotice({ show, artSource, onTurnOff, onDismiss }) {
         {estimate ? `, ${estimate}.` : '.'} Thumbnails that came with your add-ons are already showing. This only
         happens once.
       </p>
-      <Button id="photo-notice-off" variant="secondary" size="sm" onClick={onTurnOff}>
+      <Button id="photo-notice-off" variant="outline" size="sm" onClick={onTurnOff}>
         Turn off photos
       </Button>
       <button type="button" className="notice-close" id="photo-notice-close" aria-label="Dismiss" onClick={onDismiss}>
-        ×
+        <XIcon aria-hidden="true" />
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ const { detectInstalls, resolvePackageDirs } = require('./roots');
 const { readContentState, stateFor } = require('./contentxml');
 const { scanPackage } = require('./parsers/package');
 const { scanStreamedPackage } = require('./parsers/streamed');
+const { findConflicts, finishPackage, parseStockAirport, scanSceneryPackage, unifyDevelopers } = require('./scenery');
 const taxonomy = require('./parsers/taxonomy');
 const { chooseGroup } = require('./parsers/variants');
 
@@ -79,6 +80,50 @@ async function scanInstall({ install, contentState, jobs }, onJobDone) {
   });
 
   return { scanned: jobs.length, packages: packages.filter(Boolean) };
+}
+
+/**
+ * Every scenery package across the installs, with what overlaps what.
+ *
+ * Add-ons are read from disk. Stock airports are encrypted stubs whose folder
+ * name is all there is, which is enough to know that one exists.
+ */
+async function scanScenery(plans, report, progress) {
+  const jobs = plans.flatMap((plan) =>
+    plan.jobs.filter((job) => !job.spec.sealed).map((job) => ({ job, contentState: plan.contentState })),
+  );
+  const state = { ...progress, stage: 'scenery', sceneryDone: 0, sceneryTotal: jobs.length };
+  report(state, true);
+
+  const found = await mapLimit(jobs, CONCURRENCY, async ({ job, contentState }) => {
+    let pkg = null;
+    try {
+      pkg = await scanSceneryPackage(job.dir, job.folderName, { source: job.spec.source, label: job.spec.label });
+    } catch (err) {
+      if (process.env.MSFSQV_DEBUG) console.error('scenery scan failed', job.dir, err.message);
+    }
+    state.sceneryDone += 1;
+    report(state);
+    if (pkg) pkg.enabled = stateFor(contentState, job.folderName);
+    return pkg;
+  });
+  const packages = found.filter(Boolean);
+
+  const stock = plans.flatMap((plan) =>
+    plan.jobs
+      .filter((job) => job.spec.sealed)
+      .map((job) => parseStockAirport(job.folderName))
+      .filter(Boolean),
+  );
+  unifyDevelopers(packages);
+  findConflicts(packages, stock);
+
+  return {
+    packages: packages
+      .map(finishPackage)
+      .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true })),
+    stockAirportCount: new Set(stock.map((entry) => entry.ident)).size,
+  };
 }
 
 /**
@@ -1038,6 +1083,8 @@ async function scanAll(options = {}) {
     allPackages.push(...result.packages);
   }
 
+  const scenery = await scanScenery(plans, report, progress);
+
   report({ ...progress, stage: 'match' }, true);
 
   // Merge unsealed first so a Community base wins the identity fields, then
@@ -1102,6 +1149,7 @@ async function scanAll(options = {}) {
       needingOnlineArt: aircraft.filter((entry) => !entry.thumbnail).length,
     },
     aircraft,
+    scenery,
   };
 }
 

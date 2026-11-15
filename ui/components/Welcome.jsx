@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button } from '@arclux/arc-ui-react/Button';
+import { BorderBeam } from '@/components/ui/border-beam';
+import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 import { installLabel } from '../lib/format.mjs';
 import { toast } from '../lib/ui.js';
@@ -11,9 +13,8 @@ const api = window.api;
  * cannot otherwise know: what this is, which sim install it is about to read,
  * and that it will go online for photos unless told not to.
  *
- * The photo choice is a plain radio list rather than ARC's radio group: each
- * option needs a second line explaining it, and ARC reads radio content as a
- * label only.
+ * The beam round the panel is the app's one flourish, on the one screen that
+ * is seen once. Everything after it stays still.
  */
 export function Welcome({ initialSource, onStart }) {
   const [installs, setInstalls] = useState(null);
@@ -88,7 +89,7 @@ export function Welcome({ initialSource, onStart }) {
                 Not the right one? Choose a folder…
               </button>
             ) : (
-              <Button variant="secondary" size="sm" onClick={chooseFolder}>
+              <Button variant="outline" size="sm" onClick={chooseFolder}>
                 Choose your Community folder…
               </Button>
             )}
@@ -96,23 +97,17 @@ export function Welcome({ initialSource, onStart }) {
 
           <section className="welcome-section">
             <h2 className="welcome-label">Photos for aircraft without a thumbnail</h2>
-            <div className="choice-list" role="radiogroup" aria-label="Photo source">
+            <RadioGroup className="choice-list" aria-label="Photo source" value={chosen} onValueChange={setChosen}>
               {choices.map((choice) => (
-                <label className="choice" key={choice.id}>
-                  <input
-                    type="radio"
-                    name="welcome-art-source"
-                    value={choice.id}
-                    checked={chosen === choice.id}
-                    onChange={() => setChosen(choice.id)}
-                  />
+                <label className="choice" key={choice.id} data-choice={choice.id}>
+                  <RadioGroupItem value={choice.id} />
                   <span className="choice-text">
                     <span className="choice-label">{choice.label}</span>
                     <span className="choice-note">{choice.note}</span>
                   </span>
                 </label>
               ))}
-            </div>
+            </RadioGroup>
             <p className="welcome-note">
               Stock aircraft ship encrypted, with no picture on disk. Each is looked up once by name and the photo is
               kept on this PC.
@@ -124,7 +119,7 @@ export function Welcome({ initialSource, onStart }) {
             <Button
               ref={startRef}
               className="welcome-start"
-              variant="primary"
+              size="lg"
               disabled={!found || starting}
               onClick={async () => {
                 setStarting(true);
@@ -134,6 +129,7 @@ export function Welcome({ initialSource, onStart }) {
               Scan my aircraft
             </Button>
           </footer>
+          <BorderBeam size={120} duration={9} colorFrom="var(--accent-primary)" colorTo="transparent" />
         </div>
       )}
     </section>

@@ -105,12 +105,49 @@ Where a match is wrong, the detail panel offers **Find a different photo**,
 **Paste image** (Ctrl+V) and **Set thumbnail...**. A thumbnail you set yourself
 is never overwritten.
 
+## Scenery
+
+The Scenery tab lists every scenery add-on with its type, location, status and
+developer. It reads the packages themselves, so it needs no list of known
+developers and handles an add-on nobody anticipated.
+
+* **Location** comes from the airport records in each package's `.bgl` files.
+  Newer airports store coordinates but no ICAO code, so the code is taken from
+  the package's own names and marked with `*`. If that is not certain, the
+  airport is left without a code rather than guessed.
+* **Type** comes from what a package contains: Airport, Landmarks and objects,
+  Library, or Navigation data.
+* **Status** is Enabled, Disabled or Not recorded. It comes from the sim's
+  `Content.xml`, which has no entry for a package added since it was last
+  saved, so the app says so rather than assuming.
+
+Overlaps are reported in three levels, and never as an instruction to remove
+anything:
+
+* **Possible conflict:** two developers' add-ons define the same airport and
+  both are loaded. That can be a real clash, or one can be a patch for the
+  other, and the files cannot show which.
+* **Same developer:** often a deliberate pair.
+* **Over stock airport:** normal, and only worth knowing.
+
+The Map view shows the same packages on a world map, and the sidebar filters
+apply to it. Nearby airports merge into a numbered marker that zooms in when
+clicked, and add-ons for the same airport open a list. Amber marks a possible
+conflict. The map is bundled, so it works offline. Base map data is from
+[Natural Earth](https://www.naturalearthdata.com/), which is public domain.
+
+Stock scenery is not listed yet, and landmark or city packs have no location
+because they contain no airport record.
+
 ## Look
 
 The interface takes its look from flightsimulator.com so it feels at home next
 to the sim: black, white type, one sky blue, Bebas Neue for headings and Open
 Sans for everything else. Dark, light, or match Windows, chosen in Settings.
 Light mode uses a darker blue, because the site's blue measures 2.3:1 on white.
+
+Ctrl+K opens a jump menu that goes straight to any aircraft, scenery package
+or action, and `/` puts the cursor in the filter box.
 
 ![Light theme](docs/screenshot-light.png)
 
@@ -164,12 +201,24 @@ npm test           # scanner and UI-logic tests, no sim needed
 npm run dist       # build the portable exe into the project root
 ```
 
-The UI is React on [ARC UI](https://arcui.dev)'s components, built by Vite from
-`ui/` into `src/renderer/`, which is generated and not committed. React, ARC
-and the fonts are bundled into the build, so the shipped app has no loose
-`node_modules`. The theme is a set of overrides of ARC's design tokens in
-`ui/theme.css`; every component reads them, so that one file decides how the
-app looks.
+The UI is React, built by Vite from `ui/` into `src/renderer/`, which is
+generated and not committed. Everything is bundled into the build, so the
+shipped app has no loose `node_modules`. Each kind of component comes from
+the library that does it best:
+
+* [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) for
+  buttons, selects, toggles, checkboxes and dialogs. Its code is copied into
+  `ui/components/ui`, so it can be read and changed.
+* [Sonner](https://sonner.emilkowal.ski) for toasts.
+* [Vaul](https://vaul.emilkowal.ski) for the side panels, which can be
+  dragged shut by their header.
+* [cmdk](https://cmdk.paco.me) for the jump menu (Ctrl+K).
+* [NumberFlow](https://number-flow.barvian.me) for the counts above the grid.
+* One [Magic UI](https://magicui.design) piece, the beam on the welcome
+  screen.
+
+Colour, type and corner radius are set in `ui/theme.css` and every component
+reads them, so that one file decides how the app looks.
 
 Shipping a version:
 
@@ -209,24 +258,30 @@ src/main/
   contentxml.js         enabled/disabled state
   art.js                photo lookup, disk cache, user overrides
   store.js              atomic JSON settings
-  parsers/              cfg, locpak, package, streamed, taxonomy
+  scenery.js            scenery packages: type, location, overlaps
+  parsers/              cfg, locpak, package, streamed, taxonomy, bgl,
+                        registration
   data/aircraft-catalog.js
 ui/
   components/           App, TopBar, Sidebar, AircraftCard, DetailDrawer,
                         SettingsDrawer, Welcome, ScanSplash, ...
   lib/filters.mjs       filtering, facet counts, sorting (tested)
   lib/format.mjs        labels and estimates (tested)
+  lib/map.mjs           map projection, zoom, marker grouping (tested)
   lib/art.js            photo store and background sweep
-  theme.css             the look, as ARC token overrides
+  components/ui/        shadcn/ui components and the app's wrappers on them
+  theme.css             the look: colour, type, radius
   app.css               layout
 src/renderer/           built from ui/ (generated)
-test/                   scanner fixtures and UI-logic tests
+test/                   scanner, scenery, map and UI-logic tests
 ```
 
 The renderer runs with `contextIsolation` on, `nodeIntegration` off, and a CSP
 that allows no remote content and no script but the app's own. One relaxation:
-`style-src-attr 'unsafe-inline'`, because ARC's components set inline `style`
-attributes (a progress bar's width, for one) and render broken without it.
-Inline `<style>` blocks stay blocked. Images are served through a custom
+`style-src-attr 'unsafe-inline'`, because the component libraries set inline
+`style` attributes (a progress bar's width, a popup's position) and render
+broken without it. Inline `<style>` blocks stay blocked: libraries that would
+add one at runtime have that switched off at build time and their CSS loaded
+as a file instead, and NumberFlow's are allowed by hash. Images are served through a custom
 `msfsart://` scheme that only reads from the scanned package roots and the
 app's own cache directory. Fetched images are stored locally, never hotlinked.

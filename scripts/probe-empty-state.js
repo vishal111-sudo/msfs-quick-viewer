@@ -54,11 +54,11 @@ app
             const empty = document.getElementById('empty');
             const details = empty.querySelector('details');
             if (details) details.open = true;
-            const state = empty.querySelector('arc-empty-state');
+            const state = empty.querySelector('.empty-heading');
             return {
               visible: Boolean(empty),
-              heading: state ? state.heading : null,
-              button: (empty.querySelector('arc-button') || {}).textContent || null,
+              heading: state ? state.textContent : null,
+              button: (empty.querySelector('[data-slot="button"]') || {}).textContent || null,
               pathsListed: empty.querySelectorAll('.empty-paths li').length,
             };
           })()`
@@ -67,7 +67,7 @@ app
             return {
               visible: Boolean(welcome),
               heading: (welcome.querySelector('.welcome-label') || {}).textContent || null,
-              button: (welcome.querySelector('.welcome-section arc-button') || {}).textContent || null,
+              button: (welcome.querySelector('.welcome-section [data-slot="button"]') || {}).textContent || null,
               scanDisabled: welcome.querySelector('.welcome-start').disabled,
             };
           })()`,

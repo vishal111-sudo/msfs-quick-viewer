@@ -1,25 +1,34 @@
 // Small app-wide helpers that touch the page rather than data.
 
-let toastElement = null;
+import { toast as sonner } from 'sonner';
 
-/** Called once with the <Toast> element, so anything can raise a toast. */
-export function bindToast(element) {
-  toastElement = element;
-}
-
+/** Raise a toast. Sonner stacks them, so several in a row stay readable. */
 export function toast(message, variant) {
-  if (toastElement && toastElement.show) toastElement.show({ message, ...(variant ? { variant } : {}) });
+  if (variant === 'error') sonner.error(message);
+  else sonner(message);
 }
 
 const systemLight = window.matchMedia('(prefers-color-scheme: light)');
+const themeListeners = new Set();
+
+export function resolvedTheme() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
 
 /**
- * Stamp the resolved theme on <html>, which is all ARC needs. "system" is
- * worked out here so the stylesheet declares each palette exactly once.
+ * Stamp the resolved theme on <html>, which is all the stylesheet needs.
+ * "system" is worked out here so each palette is declared exactly once.
  */
 export function applyTheme(preference) {
   const resolved = preference === 'system' ? (systemLight.matches ? 'light' : 'dark') : preference || 'dark';
   document.documentElement.dataset.theme = resolved;
+  for (const listener of themeListeners) listener();
+}
+
+/** For the few components (toasts) that take the theme as a prop. */
+export function subscribeTheme(listener) {
+  themeListeners.add(listener);
+  return () => themeListeners.delete(listener);
 }
 
 /** Follow the OS live, but only while the preference is "system". */
@@ -29,9 +38,4 @@ export function followSystemTheme(getPreference) {
   };
   systemLight.addEventListener('change', listener);
   return () => systemLight.removeEventListener('change', listener);
-}
-
-/** The text input inside an ARC search or input element. */
-export function innerInput(host) {
-  return host && host.shadowRoot ? host.shadowRoot.querySelector('input') : null;
 }

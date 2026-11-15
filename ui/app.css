@@ -1,6 +1,8 @@
 /* ============================================================================
-   Layout and the app's own pieces. Every colour, font and radius here is an
-   ARC token, so theme.css is the only file that decides how the app looks.
+   Layout and the app's own pieces. Every colour, font and radius here is a
+   token from theme.css, so that one file decides how the app looks. Controls
+   (buttons, selects, toggles, dialogs) are shadcn/ui components styled with
+   Tailwind in ui/components/ui; this file is everything around them.
 
    RULES
    - The accent marks interactive state only: selection, focus, links, the
@@ -9,18 +11,9 @@
      because its backdrop is the image.
    - Monospace for identifiers you compare or copy: ICAO codes, versions,
      package names, paths, counts.
-   - Motion is state feedback only, and ARC already collapses it under
-     prefers-reduced-motion.
+   - Motion is state feedback only, with one exception: the beam on the
+     welcome screen. All of it stops under prefers-reduced-motion.
    ========================================================================= */
-
-/* ARC resets box-sizing inside its own shadow roots only. Without this, every
-   padded box on the page grew by its padding: a card body with a 98px
-   minimum and 20px of padding came out 118px tall. */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
 
 html,
 body,
@@ -100,8 +93,85 @@ body {
 }
 
 .topbar-search {
+  position: relative;
+  display: flex;
   flex: 1;
-  max-width: 560px;
+  align-items: center;
+  max-width: 480px;
+  height: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color 0.12s ease;
+}
+
+.topbar-search:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+}
+
+.topbar-search-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-left: 10px;
+  color: var(--text-ghost);
+}
+
+.topbar-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13.5px;
+}
+
+.topbar-search input::placeholder {
+  color: var(--text-ghost);
+}
+
+.topbar-search-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--text-ghost);
+  cursor: pointer;
+}
+
+.topbar-search-clear:hover {
+  color: var(--text-primary);
+}
+
+.topbar-search-clear svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* One option is always on, so the group reads as a switch: the chosen
+   segment takes the accent, the way the site marks its current tab. */
+.segmented [data-slot='toggle-group-item'] {
+  min-width: 34px;
+  padding: 0 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-label);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.segmented [data-slot='toggle-group-item'][data-pressed] {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--on-accent);
 }
 
 .topbar-actions {
@@ -112,7 +182,7 @@ body {
 }
 
 .sort {
-  width: 160px;
+  width: 150px;
 }
 
 /* ---------- layout ---------- */
@@ -346,27 +416,46 @@ body {
 
 /* ---------- grid and cards ---------- */
 
-.grid {
+/* Not ".grid": that is a Tailwind utility, and this rule would give every
+   grid in the component library the card columns. */
+.card-grid {
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(auto-fill, minmax(var(--card-min), 1fr));
   --card-min: 220px;
 }
 
-.grid[data-size='small'] {
+.card-grid[data-size='small'] {
   --card-min: 170px;
 }
 
-.grid[data-size='large'] {
+.card-grid[data-size='large'] {
   --card-min: 300px;
 }
 
 .card {
   display: block;
+  overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   outline: none;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    transform 0.14s ease;
 }
 
-.card:focus-visible::part(card) {
+.card:hover {
+  border-color: var(--border-bright);
+}
+
+.card:active {
+  transform: scale(0.985);
+}
+
+.card:focus-visible {
+  border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
@@ -419,6 +508,14 @@ body {
   font-family: var(--font-mono);
   font-size: 10.5px;
   backdrop-filter: blur(4px);
+}
+
+/* A status, so it takes ARC's warning colour rather than the accent, which
+   stays reserved for what you can act on. Solid, because it sits on a photo. */
+.badge.warn {
+  background: var(--color-warning);
+  color: #000;
+  font-weight: 500;
 }
 
 .badge.quiet {
@@ -532,27 +629,60 @@ body {
 
 /* ---------- drawers ---------- */
 
-.detail-drawer::part(panel),
-.settings-drawer::part(panel) {
+/* Vaul positions and animates the panel; this is only how it looks. */
+.side-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
   width: var(--app-detail-width);
   max-width: 92vw;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-default);
+  outline: none;
 }
 
-/* ARC pads the drawer header but not its body; match the header so content
-   lines up with the title. */
-.detail-drawer::part(body),
-.settings-drawer::part(body) {
-  padding: 0 var(--space-lg) var(--space-lg);
+.side-head {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px var(--space-lg) 12px;
+  cursor: grab;
 }
 
-/* The drawer title in the display face, like the site's headings. */
-.detail-drawer::part(title),
-.settings-drawer::part(title) {
+.side-head:active {
+  cursor: grabbing;
+}
+
+/* The panel title in the display face, like the site's headings. */
+.side-title {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 400;
+  line-height: 1.05;
   letter-spacing: 0.03em;
-  text-transform: none;
+  overflow-wrap: anywhere;
+}
+
+.side-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-lg) var(--space-lg);
+  user-select: text;
 }
 
 .detail {
@@ -849,6 +979,11 @@ body {
 }
 
 .welcome-panel {
+  position: relative;
+  padding: 30px 32px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
   display: grid;
   gap: 26px;
   width: min(540px, 100%);
@@ -929,6 +1064,7 @@ body {
 
 .choice-list {
   display: grid;
+  gap: 0;
   width: 100%;
   overflow: hidden;
   border: 1px solid var(--border-default);
@@ -954,14 +1090,13 @@ body {
   background: var(--bg-hover);
 }
 
-.choice:has(input:checked) {
+.choice:has([data-checked]) {
   background: var(--accent-primary-subtle);
   box-shadow: inset 2px 0 0 var(--accent-primary);
 }
 
-.choice input {
-  margin: 4px 0 0;
-  accent-color: var(--accent-primary);
+.choice [data-slot='radio-group-item'] {
+  margin-top: 3px;
 }
 
 .choice-text {
@@ -990,8 +1125,29 @@ body {
   }
 }
 
-.empty > arc-empty-state {
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   width: 100%;
+  text-align: center;
+}
+
+.empty-heading {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+}
+
+.empty-text {
+  max-width: 52ch;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.empty-actions {
+  margin-top: 8px;
 }
 
 /* What a package contributes, on its own line under the package's name. */
@@ -1010,4 +1166,305 @@ body {
   display: block;
   color: var(--text-muted);
   font-size: 11px;
+}
+
+/* One overlapping airport and what it overlaps with. */
+.overlap {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 14px;
+  font-size: 13px;
+}
+
+/* ---------- scenery map ---------- */
+
+.view-switch {
+  margin-left: auto;
+}
+
+.map-unplaced {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Fills what is left of the window under the two header rows. */
+.content:has(.scenery-map) {
+  padding-bottom: 16px;
+}
+
+.scenery-map {
+  position: relative;
+  height: calc(100vh - 150px);
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.scenery-map:active {
+  cursor: grabbing;
+}
+
+.map-land {
+  position: absolute;
+  inset: 0;
+}
+
+.map-fill {
+  fill: var(--bg-elevated);
+}
+
+.map-border {
+  fill: none;
+  stroke: var(--border-bright);
+  stroke-width: 0.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-marker {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  background: var(--accent-primary);
+  border: 1px solid var(--bg-deep);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.map-marker:hover {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.map-marker.cluster {
+  top: -13px;
+  left: -13px;
+  width: 26px;
+  height: 26px;
+  color: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.map-marker.conflict {
+  background: var(--color-warning);
+}
+
+.map-marker.conflict.cluster {
+  color: var(--bg-deep);
+}
+
+.map-label {
+  position: absolute;
+  top: -4px;
+  left: 13px;
+  padding: 0 3px;
+  background: var(--bg-deep);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.map-picker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  width: 320px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+}
+
+.map-picker button {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 8px;
+  padding: 5px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-picker-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-picker button:hover {
+  background: var(--bg-hover);
+}
+
+.map-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.map-controls button {
+  width: 30px;
+  height: 30px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-controls button:hover {
+  border-color: var(--accent-primary);
+}
+
+.map-credit {
+  position: absolute;
+  right: 8px;
+  bottom: 2px;
+  margin: 0;
+  color: var(--text-ghost);
+  font-size: 10.5px;
+}
+
+/* ---------- pieces around the component library ---------- */
+
+/* Base UI hides the scrollbar of an open select with this class. It would
+   add the rule itself in a <style> element; the CSP refuses that, so it
+   lives here (see ui/main.jsx). */
+.base-ui-disable-scrollbar {
+  scrollbar-width: none;
+}
+
+.base-ui-disable-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.result-count number-flow-react {
+  font-variant-numeric: tabular-nums;
+}
+
+.of-total {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.notice-close {
+  display: grid;
+  place-items: center;
+}
+
+.notice-close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.setting-select {
+  width: 100%;
+  max-width: 320px;
+}
+
+.setting-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* Identifiers in a badge keep their own face. */
+[data-slot='badge'].mono {
+  font-family: var(--font-mono);
+}
+
+[data-slot='badge'] {
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* ---------- jump menu ---------- */
+
+.command-menu [cmdk-item] {
+  gap: 10px;
+}
+
+.command-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-meta {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--text-ghost);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .card:active {
+    transform: none;
+  }
+}
+
+/* The registry's command dialog lays its popup out as a grid, which shrinks
+   the list to its content. */
+.command-menu [cmdk-root] {
+  width: 100%;
+  min-width: 0;
+}
+
+.command-menu [cmdk-list] {
+  max-height: min(420px, 60vh);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sections are grids, which would stretch a button to the full width. */
+.section > [data-slot='button'],
+.setting > [data-slot='button'] {
+  justify-self: start;
+}
+
+/* The welcome beam is decoration, so it goes first when motion is unwelcome. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-panel > [style*='--border-beam-width'] {
+    display: none;
+  }
 }

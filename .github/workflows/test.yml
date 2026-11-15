@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      # Building the UI needs React, ARC UI and Vite, but not the Electron
+      # Building the UI needs React, the UI libraries and Vite, but not the Electron
       # binary itself, which is over 100 MB.
       - run: npm ci
         env:

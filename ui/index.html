@@ -3,9 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <!-- Nothing remote and no script but the app's own. style-src-attr allows
-         inline style *attributes* only, because 52 ARC components set them
-         (a progress bar's width, for one) and render broken without. Inline
-         <style> blocks remain blocked. Fonts are bundled, never data: URLs. -->
+         inline style *attributes* only, which the component libraries set
+         (a progress bar's width, a popup's position). Inline <style> blocks
+         stay blocked, except NumberFlow's, whose exact contents are added to
+         style-src by hash at build time (vite.config.mjs). Fonts are bundled,
+         never data: URLs. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src msfsart: data:; font-src 'self';"

@@ -64,6 +64,12 @@ const DEFAULT_SETTINGS = {
   cardSize: 'medium',
   /** Last used filters, restored on launch. */
   lastFilters: null,
+  /** Last used scenery filters, kept apart from the aircraft ones. */
+  lastSceneryFilters: null,
+  /** How the scenery tab was showing: 'grid' or 'map'. */
+  lastSceneryView: 'grid',
+  /** Which tab was open: 'aircraft' or 'scenery'. */
+  lastSection: 'aircraft',
   /** Hide aircraft the sim's Content Manager has disabled. */
   hideDisabled: false,
   /** Whether the one-time welcome screen has been seen and dismissed. */

@@ -12,13 +12,20 @@ const { app, BrowserWindow } = require('electron');
 const { useProfileCopy } = require('./profile');
 const { redactForScreenshot } = require('./redact');
 
-// In-page function that closes an ARC drawer through its own close button, so
-// the run exercises the real close path rather than poking a property.
+// In-page function that closes a side panel through its own close button, so
+// the run exercises the real close path. A panel is in the DOM only while open.
 const CLOSE_DRAWER = `((id) => {
   const drawer = document.getElementById(id);
-  const close = drawer && drawer.shadowRoot && drawer.shadowRoot.querySelector('[part~="close"]');
+  const close = drawer && drawer.querySelector('.side-close');
   if (close) close.click();
 })`;
+
+// Wait for a paint, but not forever: Chromium pauses requestAnimationFrame for
+// a window behind others, and an unbounded wait here hung whole runs.
+const NEXT_PAINT = `Promise.race([
+  new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  new Promise((resolve) => setTimeout(resolve, 500)),
+])`;
 
 const OUT = process.argv[2] || path.join(__dirname, '..', 'smoke.png');
 const problems = [];
@@ -152,35 +159,54 @@ app.whenReady().then(async () => {
   })()`);
   // capturePage can hand back the previous composited frame, so wait for the
   // drawer to be painted rather than merely present in the DOM.
-  await win.webContents.executeJavaScript(
-    'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))',
-  );
+  await win.webContents.executeJavaScript(NEXT_PAINT);
   await new Promise((resolve) => setTimeout(resolve, 3500));
   await redactForScreenshot(win);
   const detailShot = await win.webContents.capturePage();
   const detailOut = OUT.replace(/.png$/, '-detail.png');
   await fsp.writeFile(detailOut, detailShot.toPNG());
-  const drawerOpen = await win.webContents.executeJavaScript("document.getElementById('detail').open === true");
+  const drawerOpen = await win.webContents.executeJavaScript("!!document.getElementById('detail')");
   console.log('SMOKE detail drawer:', opened, '| open:', drawerOpen, '->', detailOut);
   if (!drawerOpen) problems.push('detail drawer did not open');
 
   // Settings builds asynchronously now (it asks main for the photo sources),
   // so prove it actually renders.
   await win.webContents.executeJavaScript(`${CLOSE_DRAWER}('detail'); true`);
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  const detailClosed = await win.webContents.executeJavaScript("!document.getElementById('detail')");
+  if (!detailClosed) problems.push('detail drawer did not close');
+
+  // Ctrl+K: the jump menu lists every aircraft and finds one by typing.
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control'] });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control'] });
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const jump = await win.webContents.executeJavaScript(`(() => {
+    const menu = document.getElementById('command-menu');
+    return { open: Boolean(menu), items: menu ? menu.querySelectorAll('[cmdk-item]').length : 0 };
+  })()`);
+  console.log('SMOKE jump menu:', JSON.stringify(jump));
+  if (!jump.open || jump.items < 5) problems.push('jump menu did not open');
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   await win.webContents.executeJavaScript("document.getElementById('open-settings').click(); true");
   await new Promise((resolve) => setTimeout(resolve, 1500));
+  // The theme select lists its options only while open.
+  await win.webContents.executeJavaScript("document.getElementById('setting-theme').click(); true");
+  await new Promise((resolve) => setTimeout(resolve, 500));
   const settingsState = await win.webContents.executeJavaScript(`(() => {
     const drawer = document.getElementById('settings');
-    // The first select is the theme; its options are the three themes.
-    const select = drawer.querySelector('arc-select');
     return {
-      open: drawer.open === true,
-      sources: select ? [...select.querySelectorAll('arc-option')].map((o) => o.value) : [],
-      chosen: select ? select.value : null,
-      sections: drawer.querySelectorAll('.section').length,
+      open: Boolean(drawer),
+      sources: [...document.querySelectorAll('[data-slot="select-item"]')].map((o) => o.textContent.trim()),
+      chosen: drawer ? drawer.querySelector('#setting-theme').textContent.trim() : null,
+      sections: drawer ? drawer.querySelectorAll('.section').length : 0,
     };
   })()`);
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+  await new Promise((resolve) => setTimeout(resolve, 400));
   console.log('SMOKE settings:', JSON.stringify(settingsState));
   if (!settingsState.open || settingsState.sources.length < 3) problems.push('settings drawer incomplete');
 
@@ -197,9 +223,7 @@ app.whenReady().then(async () => {
   await win.webContents.executeJavaScript(
     `${CLOSE_DRAWER}('settings'); document.documentElement.dataset.theme = 'light'; true`,
   );
-  await win.webContents.executeJavaScript(
-    'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))',
-  );
+  await win.webContents.executeJavaScript(NEXT_PAINT);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   await redactForScreenshot(win);
   const lightShot = await win.webContents.capturePage();

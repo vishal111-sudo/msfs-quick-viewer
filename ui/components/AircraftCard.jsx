@@ -1,5 +1,4 @@
 import React, { memo, useEffect, useRef } from 'react';
-import { Card } from '@arclux/arc-ui-react/Card';
 
 import { requestArt, useArt, useLookedUp } from '../lib/art.js';
 import { placeholderLabel } from '../lib/format.mjs';
@@ -47,14 +46,10 @@ function AircraftCardImpl({ aircraft, artSource, onOpen }) {
   else if (aircraft.engineLabel && aircraft.engineLabel !== 'Unknown') detail = <span>{aircraft.engineLabel}</span>;
 
   return (
-    <Card
+    <div
       ref={ref}
       className="card"
       data-id={aircraft.id}
-      interactive
-      padding="none"
-      // ARC's interactive card adds hover styling only. Focus and Enter/Space
-      // are ours to provide, as the old cards did.
       role="button"
       tabIndex={0}
       aria-label={aircraft.name}
@@ -103,7 +98,7 @@ function AircraftCardImpl({ aircraft, artSource, onOpen }) {
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
